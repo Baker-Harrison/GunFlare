@@ -242,6 +242,7 @@ def params(mat):
         "pattern": int(mat.get("pattern", -1)),
         "wear": float(mat.get("wear", 1.0)),
         "seed": float(mat.get("seed", 0.0)),
+        "crease": float(mat.get("crease", 1.0)),
     }
 
 
@@ -391,7 +392,7 @@ def layers(g, p, masks, dust_on=True):
         col = g.mixc(g.mul(g.add(grime, g.mul(dust, 0.7)), 0.5), col, (0.17, 0.145, 0.11))
         rough = g.mixf(edge, p["rough"], p["rough"] - 0.15)
         rough = g.mixf(g.add(grime, dust), rough, 0.92)
-        height = g.sub(g.mul(grain, 0.35), crease)
+        height = g.sub(g.mul(grain, 0.35), g.mul(crease, p["crease"]))
         return col, rough, 0.0, height, 0.0004
     if k == "skin":
         blotch = g.noise(35.0, 4.0, 0.55, o)

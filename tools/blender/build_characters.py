@@ -653,10 +653,12 @@ def finish_soldier(fname, parts):
 # one baked texture atlas. tools/rig_arms.py adds the skeleton after export.
 
 LEFT_REF = Vector((0.0, 0.25, 0.04))  # typical LeftHand marker (bottom of the handguard)
-GLOVE_H = 0.00045
+GLOVE_H = 0.00045  # detail mesh (normal map source)
 SLEEVE_H = 0.0011
-GLOVE_TRIS = 26000
-SLEEVE_TRIS = 7000
+GLOVE_LOW_H = 0.00125  # game mesh, before decimation
+SLEEVE_LOW_H = 0.0025
+GLOVE_TRIS = 32000
+SLEEVE_TRIS = 8000
 GLOVE_COLOURS = {
     "sentinel": {"palm": (0.27, 0.22, 0.16), "back": (0.4, 0.35, 0.26), "pad": (0.2, 0.18, 0.14), "cuff": (0.3, 0.27, 0.2)},
     "militia": {"palm": (0.05, 0.05, 0.052), "back": (0.085, 0.085, 0.09), "pad": (0.035, 0.035, 0.037), "cuff": (0.06, 0.06, 0.065)},
@@ -678,6 +680,13 @@ def _mesh_obj(name, verts, quads, mats, zones=None):
     return obj
 
 
+def _glove_obj(arm, name, lo, hi, step, mats, smooth_iter):
+    import hand_anatomy as ha
+    v, q = ha.build_mesh(arm.glove_sdf, lo, hi, step, smooth_iter=smooth_iter)
+    zones = np.minimum(arm.glove_zones(v[q].mean(axis=1)), 3)
+    return _mesh_obj(name, v, q, mats, zones)
+
+
 def _decimated(src, name, tris):
     obj = src.copy()
     obj.data = src.data.copy()
@@ -695,7 +704,7 @@ def _decimated(src, name, tris):
 def _glove_mats(fname, m):
     c = {k: _lin(v) for k, v in GLOVE_COLOURS[fname].items()}
     return [
-        g.material("Gloves", c["palm"], 0.0, 0.62, kind="leather", seed=3.0),
+        g.material("Gloves", c["palm"], 0.0, 0.62, kind="leather", seed=3.0, crease=0.2),
         g.material("GloveFabric", c["back"], 0.0, 0.85, kind="fabric", seed=6.0, pattern=-1),
         g.material("GlovePad", c["pad"], 0.0, 0.5, kind="rubber", seed=7.0),
         g.material("GloveCuff", c["cuff"], 0.0, 0.8, kind="nylon", seed=8.0, pattern=-1),
@@ -710,14 +719,18 @@ def build_arms(fname):
     high = {}
     for prefix, name in (("R", "ArmR"), ("L", "ArmL"), ("P", "ArmLPistol")):
         arm = ha.Arm(prefix)
-        v, q = ha.build_mesh(arm.glove_sdf, *arm.glove_bounds(), GLOVE_H)
-        centres = v[q].mean(axis=1)
-        zones = np.minimum(arm.glove_zones(centres), 3)
-        hi_g = _mesh_obj(name + "_HiGlove", v, q, glove_mats, zones)
-        v, q = ha.build_mesh(arm.sleeve_sdf, *arm.sleeve_bounds(), SLEEVE_H)
+        # Detail meshes for the normal map, and game meshes meshed directly at
+        # a coarse step (even triangles and clean UV islands), then reduced.
+        lo, hi = arm.glove_bounds()
+        hi_g = _glove_obj(arm, name + "_HiGlove", lo, hi, GLOVE_H, glove_mats, 6)
+        lo_g = _decimated(_glove_obj(arm, name + "_GloveSrc", lo, hi, GLOVE_LOW_H, glove_mats, 8), name + "_Glove", GLOVE_TRIS)
+        lo, hi = arm.sleeve_bounds()
+        v, q = ha.build_mesh(arm.sleeve_sdf, lo, hi, SLEEVE_H)
         hi_s = _mesh_obj(name + "_HiSleeve", v, q, [m["uniform"]])
-        lo_g = _decimated(hi_g, name + "_Glove", GLOVE_TRIS)
-        lo_s = _decimated(hi_s, name + "_Sleeve", SLEEVE_TRIS)
+        v, q = ha.build_mesh(arm.sleeve_sdf, lo, hi, SLEEVE_LOW_H, smooth_iter=8)
+        lo_s = _decimated(_mesh_obj(name + "_SleeveSrc", v, q, [m["uniform"]]), name + "_Sleeve", SLEEVE_TRIS)
+        for src in (name + "_GloveSrc", name + "_SleeveSrc"):
+            bpy.data.objects.remove(bpy.data.objects[src], do_unlink=True)
         low = texlib.join([lo_g, lo_s], name)
         low.vertex_groups.clear()
         lows.append(low)

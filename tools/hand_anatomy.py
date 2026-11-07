@@ -456,7 +456,7 @@ class Arm:
         r = r_out * (1.0 + 0.07 * np.cos(2 * phi)) + folds + band + hem
         outer = _tube(rad - r, np.abs(h - L * 0.5) - L * 0.5)
         # Open at the wrist end: subtract an inner tube that runs out past it.
-        inner = _tube(rad - (r - 0.0028), np.abs(h - (L + 0.1) * 0.5) - (L + 0.3) * 0.5)
+        inner = _tube(rad - (r - 0.004), np.abs(h - (L + 0.1) * 0.5) - (L + 0.3) * 0.5)
         return np.maximum(outer, -inner)
 
     def glove_bounds(self, pad=0.006):
