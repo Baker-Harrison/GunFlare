@@ -24,9 +24,11 @@ import sys
 
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 sys.path.append(os.path.dirname(__file__))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import gunlib as g  # noqa: E402
 import texlib  # noqa: E402
 
@@ -644,56 +646,93 @@ def finish_soldier(fname, parts):
 
 
 # --- First-person arms -----------------------------------------------------------
+# The arms come from the anatomy in tools/hand_anatomy.py: anatomical parts in
+# a signed distance field, meshed with surface nets at 0.45 mm. That detailed
+# mesh gives the normal map. A decimated copy is the game mesh. Glove zones
+# (palm leather, back fabric, knuckle armour, cuff) are separate materials in
+# one baked texture atlas. tools/rig_arms.py adds the skeleton after export.
 
-# Weapon-space reference points (Blender: +Y muzzle, +Z up). The grip axis
-# matches gunlib.pistol_grip (18 degrees rake) on the rifles.
-GRIP_TOP = Vector((0.0, -0.02, 0.0))
-GRIP_AXIS = Vector((0.0, -math.sin(R(18)), -math.cos(R(18))))
 LEFT_REF = Vector((0.0, 0.25, 0.04))  # typical LeftHand marker (bottom of the handguard)
+GLOVE_H = 0.00045
+SLEEVE_H = 0.0011
+GLOVE_TRIS = 26000
+SLEEVE_TRIS = 7000
+GLOVE_COLOURS = {
+    "sentinel": {"palm": (0.27, 0.22, 0.16), "back": (0.4, 0.35, 0.26), "pad": (0.2, 0.18, 0.14), "cuff": (0.3, 0.27, 0.2)},
+    "militia": {"palm": (0.05, 0.05, 0.052), "back": (0.085, 0.085, 0.09), "pad": (0.035, 0.035, 0.037), "cuff": (0.06, 0.06, 0.065)},
+}
+
+
+def _mesh_obj(name, verts, quads, mats, zones=None):
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([tuple(v) for v in verts], [], [tuple(int(i) for i in q) for q in quads])
+    me.update()
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(obj)
+    for m in mats:
+        obj.data.materials.append(m)
+    if zones is not None:
+        me.polygons.foreach_set("material_index", np.asarray(zones, dtype=np.int32))
+    me.polygons.foreach_set("use_smooth", np.ones(len(me.polygons), dtype=bool))
+    me.update()
+    return obj
+
+
+def _decimated(src, name, tris):
+    obj = src.copy()
+    obj.data = src.data.copy()
+    obj.name = name
+    bpy.context.collection.objects.link(obj)
+    current = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+    mod = obj.modifiers.new("Decimate", "DECIMATE")
+    mod.decimate_type = "COLLAPSE"
+    mod.ratio = min(1.0, tris / max(current, 1))
+    mod.use_collapse_triangulate = True
+    g.apply_obj(obj)
+    return obj
+
+
+def _glove_mats(fname, m):
+    c = {k: _lin(v) for k, v in GLOVE_COLOURS[fname].items()}
+    return [
+        g.material("Gloves", c["palm"], 0.0, 0.62, kind="leather", seed=3.0),
+        g.material("GloveFabric", c["back"], 0.0, 0.85, kind="fabric", seed=6.0, pattern=-1),
+        g.material("GlovePad", c["pad"], 0.0, 0.5, kind="rubber", seed=7.0),
+        g.material("GloveCuff", c["cuff"], 0.0, 0.8, kind="nylon", seed=8.0, pattern=-1),
+    ]
 
 
 def build_arms(fname):
-    f = FACTIONS[fname]
-    m = faction_mats(f)
-    groups = {"ArmR": [], "ArmL": [], "ArmLPistol": []}
-    # Right hand: wraps the grip, palm on the back strap and right side, index on the trigger.
-    c = GRIP_TOP + GRIP_AXIS * 0.045
-    hand = wrap_hand("R", c, -GRIP_AXIS, (0.55, -1.0, 0.0), 0.019, m["gloves"], "ArmR", handed=1,
-                     palm_arc=1.35, index_straight=((0, 1, 0.05), (-1, 0, 0), (0, 0, -1)), thumb=("wrap", 0.75),
-                     finger_start=[0.65, 0.68, 0.7, 0.72], finger_curl=[1.0, 1.0, 1.0, 1.0])
-    groups["ArmR"] += hand
-    wrist = Vector(hand[0]["wrist"])
-    elbow = wrist + Vector((0.06, -0.3, -0.16))
-    groups["ArmR"] += forearm("R", wrist, elbow, m, "ArmR", ref=(1, 0, 0.3))
-    groups["ArmR"].append(_watch(m, wrist, elbow, side=1))
-    # Left hand: under the handguard, fingers up the right side, thumb along the left side.
-    hc = LEFT_REF + Vector((0.0, 0.0, 0.024))
-    hand = wrap_hand("L", hc + Vector((0, -0.02, 0)), (0, 1, 0), (-0.45, 0.0, -1.0), 0.026, m["gloves"], "ArmL", handed=-1,
-                     palm_arc=1.2, thumb=("straight", 1.0), finger_start=[0.62, 0.62, 0.64, 0.66], finger_curl=[0.62, 0.66, 0.66, 0.66])
-    groups["ArmL"] += hand
-    wrist = Vector(hand[0]["wrist"])
-    elbow = wrist + Vector((-0.12, -0.24, -0.2))
-    groups["ArmL"] += forearm("L", wrist, elbow, m, "ArmL", ref=(-1, 0, 0.3))
-    # Pistol support hand: wraps the right fist from the left side.
-    pc = GRIP_TOP + GRIP_AXIS * 0.05 + Vector((-0.012, 0.01, 0.0))
-    hand = wrap_hand("P", pc, -GRIP_AXIS, (-1.0, 0.6, 0.0), 0.04, m["gloves"], "ArmLPistol", handed=-1,
-                     palm_arc=1.0, thumb=("straight", 1.0), finger_start=[0.55, 0.55, 0.58, 0.6], finger_curl=[0.8, 0.85, 0.85, 0.85])
-    groups["ArmLPistol"] += hand
-    wrist = Vector(hand[0]["wrist"])
-    elbow = wrist + Vector((-0.14, -0.26, -0.16))
-    groups["ArmLPistol"] += forearm("P", wrist, elbow, m, "ArmLPistol", ref=(-1, 0, 0.3))
-    g.apply_all()
-    joined = []
-    for nm, objs in groups.items():
-        o = texlib.join(objs, nm)
-        o.vertex_groups.clear()
-        joined.append(o)
+    import hand_anatomy as ha
+    m = faction_mats(FACTIONS[fname])
+    glove_mats = _glove_mats(fname, m)
+    lows = []
+    high = {}
+    for prefix, name in (("R", "ArmR"), ("L", "ArmL"), ("P", "ArmLPistol")):
+        arm = ha.Arm(prefix)
+        v, q = ha.build_mesh(arm.glove_sdf, *arm.glove_bounds(), GLOVE_H)
+        centres = v[q].mean(axis=1)
+        zones = np.minimum(arm.glove_zones(centres), 3)
+        hi_g = _mesh_obj(name + "_HiGlove", v, q, glove_mats, zones)
+        v, q = ha.build_mesh(arm.sleeve_sdf, *arm.sleeve_bounds(), SLEEVE_H)
+        hi_s = _mesh_obj(name + "_HiSleeve", v, q, [m["uniform"]])
+        lo_g = _decimated(hi_g, name + "_Glove", GLOVE_TRIS)
+        lo_s = _decimated(hi_s, name + "_Sleeve", SLEEVE_TRIS)
+        low = texlib.join([lo_g, lo_s], name)
+        low.vertex_groups.clear()
+        lows.append(low)
+        high[name] = [hi_g, hi_s]
+        print("arm %s: glove %d faces, sleeve %d faces, game mesh %d faces" % (
+            name, len(hi_g.data.polygons), len(hi_s.data.polygons), len(low.data.polygons)))
+    out = os.path.join(OUT, "arms_%s.gltf" % fname)
+    texlib.bake_textures(lows, os.path.join(OUT, "textures"), "arms_%s" % fname, res=2048, profile="arms", high=high)
+    for objs in high.values():
+        for o in objs:
+            bpy.data.objects.remove(o, do_unlink=True)
     # ArmL origin at the reference marker so the game can place it on any weapon.
     left = bpy.data.objects["ArmL"]
     left.data.transform(Matrix.Translation(-LEFT_REF))
     left.location = LEFT_REF
-    out = os.path.join(OUT, "arms_%s.gltf" % fname)
-    texlib.bake_textures(joined, os.path.join(OUT, "textures"), "arms_%s" % fname, res=2048, profile="arms")
     _clean(out)
     texlib.export_gltf(out)
 

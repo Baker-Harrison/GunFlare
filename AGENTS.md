@@ -64,6 +64,8 @@ Run the model test:
 
 If you rebuild a model with `tools/blender`, run `python tools/set_texture_imports.py` after the Godot import.
 
+The first-person arms come from the anatomy in `tools/hand_anatomy.py`. If you change that file, rebuild the arms with `tools/blender/build_characters.py -- arms`.
+
 If you rebuild the first-person arms with `tools/blender`, run `python tools/rig_arms.py` before the Godot import. The script adds the hand skeleton that the viewmodel moves.
 
 Run the pull-request text check:

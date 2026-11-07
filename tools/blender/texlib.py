@@ -496,6 +496,33 @@ def _bake(objs, kind, samples):
         bpy.ops.object.bake(type=kind, margin=sc.render.bake.margin)
 
 
+def _bake_from_high(objs, high, samples):
+    """Normal bake, one low object at a time, from its high objects."""
+    sc = bpy.context.scene
+    sc.cycles.samples = samples
+    bk = sc.render.bake
+    bk.use_selected_to_active = True
+    bk.cage_extrusion = 0.0015
+    bk.max_ray_distance = 0.004
+    first = True
+    for o in objs:
+        src = high.get(o.name) or []
+        if not src:
+            bk.use_selected_to_active = False
+            _select([o])
+        else:
+            bk.use_selected_to_active = True
+            _select([o] + list(src))
+            bpy.context.view_layer.objects.active = o
+        bk.use_clear = first
+        bpy.ops.object.bake(type="NORMAL", normal_space="TANGENT", margin=bk.margin, use_clear=first,
+                            use_selected_to_active=bool(src), cage_extrusion=bk.cage_extrusion,
+                            max_ray_distance=bk.max_ray_distance)
+        first = False
+    bk.use_selected_to_active = False
+    bk.use_clear = True
+
+
 def _gltf_output_group():
     grp = bpy.data.node_groups.get("glTF Material Output")
     if grp:
@@ -506,8 +533,13 @@ def _gltf_output_group():
     return grp
 
 
-def bake_textures(objs, out_dir, prefix, res=2048, profile="weapon", normal_strength=1.0):
-    """Bakes the PBR set for objs and rewires their materials. Returns file paths."""
+def bake_textures(objs, out_dir, prefix, res=2048, profile="weapon", normal_strength=1.0, high=None):
+    """Bakes the PBR set for objs and rewires their materials. Returns file paths.
+
+    high: optional {low object name: [high-detail objects]}. The normal pass
+    then bakes the detail of the high objects (with their procedural bump)
+    onto the low object, selected to active. The high objects must use the
+    same materials as their low object."""
     prof = PROFILES[profile]
     objs = [o for o in objs if bakeable(o)]
     if not objs:
@@ -547,7 +579,10 @@ def bake_textures(objs, out_dir, prefix, res=2048, profile="weapon", normal_stre
         g._set(bsdf.inputs["Normal"], nrm)
         g.out(bsdf.outputs[0])
         g.target(img_n)
-    _bake(objs, "NORMAL", 24)
+    if high:
+        _bake_from_high(objs, high, 24)
+    else:
+        _bake(objs, "NORMAL", 24)
 
     # Pass 3 and 4: albedo and ORM from procedural layers.
     for pass_name, img in (("albedo", img_c), ("orm", img_orm)):
