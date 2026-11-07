@@ -7,6 +7,7 @@ ZIP_PATH="$2"
 INSTALL_DIR="$3"
 EXE_NAME="$4"
 LOG_PATH="$5"
+MOVED="${6:-0}"
 
 log() {
     mkdir -p "$(dirname "$LOG_PATH")"
@@ -36,8 +37,19 @@ if [ ! -e "$source/$EXE_NAME" ]; then
     log "FAIL The package does not contain $EXE_NAME."
     exit 1
 fi
+mkdir -p "$INSTALL_DIR"
+case "$EXE_NAME" in
+    *.app)
+        # Replace the whole bundle. Old files in a bundle break its signature.
+        rm -rf "$INSTALL_DIR/$EXE_NAME"
+        ;;
+esac
 cp -a "$source"/. "$INSTALL_DIR"/
-log "OK"
+if [ "$MOVED" = "1" ]; then
+    log "OK MOVED $INSTALL_DIR"
+else
+    log "OK"
+fi
 rm -rf "$stage"
 target="$INSTALL_DIR/$EXE_NAME"
 case "$EXE_NAME" in

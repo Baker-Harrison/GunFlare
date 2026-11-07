@@ -10,7 +10,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ZipPath,
     [Parameter(Mandatory = $true)][string]$InstallDir,
     [Parameter(Mandatory = $true)][string]$ExeName,
-    [Parameter(Mandatory = $true)][string]$LogPath
+    [Parameter(Mandatory = $true)][string]$LogPath,
+    [string]$Moved = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,8 +46,28 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $source $ExeName))) {
         throw "The package does not contain $ExeName."
     }
-    Copy-Item -Path (Join-Path $source "*") -Destination $InstallDir -Recurse -Force
-    Write-UpdateLog "OK"
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    # A virus scanner or Explorer can hold a file for a short time after the game stops.
+    $attempt = 0
+    while ($true) {
+        try {
+            Copy-Item -Path (Join-Path $source "*") -Destination $InstallDir -Recurse -Force
+            break
+        }
+        catch {
+            $attempt += 1
+            if ($attempt -ge 30) {
+                throw
+            }
+            Start-Sleep -Seconds 1
+        }
+    }
+    if ($Moved -eq "1") {
+        Write-UpdateLog ("OK MOVED " + $InstallDir)
+    }
+    else {
+        Write-UpdateLog "OK"
+    }
     Start-Process -FilePath (Join-Path $InstallDir $ExeName) -WorkingDirectory $InstallDir
 }
 catch {
@@ -71,6 +92,7 @@ ZIP_PATH="$2"
 INSTALL_DIR="$3"
 EXE_NAME="$4"
 LOG_PATH="$5"
+MOVED="${6:-0}"
 
 log() {
     mkdir -p "$(dirname "$LOG_PATH")"
@@ -100,8 +122,19 @@ if [ ! -e "$source/$EXE_NAME" ]; then
     log "FAIL The package does not contain $EXE_NAME."
     exit 1
 fi
+mkdir -p "$INSTALL_DIR"
+case "$EXE_NAME" in
+    *.app)
+        # Replace the whole bundle. Old files in a bundle break its signature.
+        rm -rf "$INSTALL_DIR/$EXE_NAME"
+        ;;
+esac
 cp -a "$source"/. "$INSTALL_DIR"/
-log "OK"
+if [ "$MOVED" = "1" ]; then
+    log "OK MOVED $INSTALL_DIR"
+else
+    log "OK"
+fi
 rm -rf "$stage"
 target="$INSTALL_DIR/$EXE_NAME"
 case "$EXE_NAME" in
@@ -122,6 +155,7 @@ var status := "idle"
 var progress := 0.0
 var message := ""
 var install_error := ""
+var install_notice := ""
 var _url := ""
 var _asset_name := ""
 var _exe_name := ""
@@ -307,13 +341,15 @@ func _on_download(result: int, code: int) -> void:
 		return
 	script.store_string(pack["text"])
 	script.close()
-	var install_dir := OS.get_executable_path().get_base_dir()
+	var target := install_target()
+	var install_dir: String = target["dir"]
+	var moved := "1" if target["moved"] else "0"
 	var pid := str(OS.get_process_id())
 	var args: PackedStringArray
 	if OS.get_name() == "Windows":
 		args = PackedStringArray([
 			"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script_path,
-			pid, zip, install_dir, _exe_name, log_path,
+			pid, zip, install_dir, _exe_name, log_path, moved,
 		])
 		var shell := "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 		if not FileAccess.file_exists(shell):
@@ -322,7 +358,7 @@ func _on_download(result: int, code: int) -> void:
 			_fail("The install script did not start.")
 			return
 	else:
-		args = PackedStringArray([script_path, pid, zip, install_dir, _exe_name, log_path])
+		args = PackedStringArray([script_path, pid, zip, install_dir, _exe_name, log_path, moved])
 		if OS.create_process("sh", args) < 0:
 			_fail("The install script did not start.")
 			return
@@ -337,9 +373,76 @@ func _read_install_log() -> void:
 		return
 	var text := FileAccess.get_file_as_string(path).strip_edges()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	if text.begins_with("OK MOVED "):
+		install_notice = "GunFare %s is now in %s. Start the game from that folder." % [current_version, text.trim_prefix("OK MOVED ").strip_edges()]
+		return
 	if text == "OK" or text == "":
 		return
-	install_error = text.trim_prefix("FAIL ").left(180)
+	install_error = text.trim_prefix("FAIL ").left(400)
+
+
+## The folder that receives the update, and whether it differs from the
+## folder of the running game. A copy that runs from a zip, a temporary
+## folder or a read-only folder installs into a permanent folder instead.
+func install_target() -> Dictionary:
+	var exe := OS.get_executable_path()
+	var dir := exe.get_base_dir()
+	if OS.get_name() == "macOS":
+		# .../GunFare.app/Contents/MacOS/GunFare -> the folder that holds GunFare.app
+		var bundle := dir.get_base_dir().get_base_dir()
+		if bundle.ends_with(".app"):
+			dir = bundle.get_base_dir()
+	if is_temporary_dir(dir, OS.get_name(), _temp_dirs()) or not _is_writable(dir):
+		return {"dir": _fallback_dir(), "moved": true}
+	return {"dir": dir, "moved": false}
+
+
+static func is_temporary_dir(dir: String, os_name: String, temp_dirs: PackedStringArray) -> bool:
+	var d := dir.replace("\\", "/").to_lower().trim_suffix("/") + "/"
+	if os_name == "macOS" and d.contains("/apptranslocation/"):
+		return true
+	if os_name == "Windows" and d.contains(".zip/"):
+		return true
+	for t in temp_dirs:
+		var n := t.replace("\\", "/").to_lower().trim_suffix("/")
+		if n != "" and d.begins_with(n + "/"):
+			return true
+	return false
+
+
+func _temp_dirs() -> PackedStringArray:
+	var out := PackedStringArray()
+	for key in ["TEMP", "TMP", "TMPDIR"]:
+		var v := OS.get_environment(key)
+		if v != "":
+			out.append(v)
+	return out
+
+
+func _is_writable(dir: String) -> bool:
+	var probe := dir.path_join(".gunfare_write_test")
+	var f := FileAccess.open(probe, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.close()
+	DirAccess.remove_absolute(probe)
+	return true
+
+
+func _fallback_dir() -> String:
+	match OS.get_name():
+		"Windows":
+			var local := OS.get_environment("LOCALAPPDATA")
+			if local == "":
+				local = OS.get_environment("USERPROFILE").path_join("AppData/Local")
+			return local.replace("\\", "/").path_join("Programs/GunFare")
+		"macOS":
+			return OS.get_environment("HOME").path_join("Applications")
+		_:
+			var data := OS.get_environment("XDG_DATA_HOME")
+			if data == "":
+				data = OS.get_environment("HOME").path_join(".local/share")
+			return data.path_join("GunFare")
 
 
 func _fail(text: String) -> void:
