@@ -51,6 +51,11 @@ jobs:
       - name: Load every script
         run: python tools/run_godot.py --timeout 300 -- godot --headless --path . --script res://tests/load_all_scripts.gd
 
+      - name: Check the models and the texture import options
+        run: |
+          python tools/set_texture_imports.py --check
+          python tools/run_godot.py --timeout 300 -- godot --headless --path . res://tests/test_models.tscn
+
       - name: Run progression tests
         run: python tools/run_godot.py --timeout 300 -- godot --headless --path . res://tests/test_progression.tscn -- --no-update
 

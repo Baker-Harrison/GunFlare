@@ -14,6 +14,10 @@ uniform float metallic_value = 0.25;
 uniform float roughness_value = 0.62;
 uniform vec3 emission_color : source_color = vec3(1.0, 0.35, 0.05);
 uniform float wear = 0.25;
+// Baked maps of the model (normal and ORM), when the mesh has them.
+uniform bool use_maps = false;
+uniform sampler2D normal_map : hint_normal, filter_linear_mipmap_anisotropic;
+uniform sampler2D orm_map : hint_default_white, filter_linear_mipmap_anisotropic;
 
 varying vec3 obj_pos;
 varying vec3 obj_norm;
@@ -92,6 +96,15 @@ void fragment() {
 	float edge = smoothstep(0.62, 0.78, fbm(p * 4.0 + 100.0));
 	col = mix(col, vec3(0.35, 0.35, 0.36), edge * wear);
 	metal = mix(metal, 0.9, edge * wear);
+	if (use_maps) {
+		vec3 orm = texture(orm_map, UV).rgb;
+		NORMAL_MAP = texture(normal_map, UV).rgb;
+		AO = orm.r;
+		AO_LIGHT_AFFECT = 0.4;
+		// Baked roughness keeps the scratches and grime of the model.
+		rough = clamp(mix(rough, orm.g, 0.4), 0.05, 1.0);
+		col *= mix(1.0, orm.r, 0.5);
+	}
 	ALBEDO = col;
 	METALLIC = metal;
 	ROUGHNESS = rough;
