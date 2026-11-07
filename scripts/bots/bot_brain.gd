@@ -6,15 +6,22 @@ extends Node
 enum State { ROAM, COMBAT, SEARCH }
 
 ## Per difficulty: recruit, regular, hardened, veteran
-const REACTION := [0.62, 0.42, 0.28, 0.18]
-const TURN_RATE := [160.0, 260.0, 380.0, 560.0] # deg/s
-const AIM_ERROR := [5.5, 3.2, 1.8, 0.9] # deg at acquisition
-const AIM_SETTLE := [1.2, 2.0, 3.2, 4.5] # error decay rate
-const HEADSHOT_CHANCE := [0.05, 0.12, 0.22, 0.35]
-const VIEW_RANGE := [70.0, 95.0, 120.0, 150.0]
-const FOV_DEG := [100.0, 115.0, 130.0, 140.0]
-const RECOIL_COMP := [0.3, 0.55, 0.75, 0.9]
-const GRENADE_RATE := [0.01, 0.025, 0.04, 0.05] # chance / s while engaged
+## Tuned so a bot plays like a person of that skill: it needs time to spot
+## and react, it never aims perfectly, and it fights its own recoil.
+const REACTION := [0.75, 0.55, 0.42, 0.32] # s before the first shot
+const REACTION_PER_10M := [0.08, 0.06, 0.045, 0.035] # extra s per 10 m of range
+const SURPRISE_DELAY := [0.45, 0.35, 0.25, 0.18] # extra s when the enemy was outside the view cone
+const TURN_RATE := [130.0, 190.0, 260.0, 340.0] # deg/s
+const AIM_ERROR := [8.0, 5.5, 3.8, 2.6] # deg at acquisition
+const AIM_SETTLE := [0.9, 1.3, 1.8, 2.4] # error decay rate
+const AIM_FLOOR := [1.8, 1.2, 0.8, 0.5] # deg of tracking error that never settles
+const MOVE_AIM_PENALTY := [2.0, 1.5, 1.1, 0.8] # deg added while the bot moves
+const HEADSHOT_CHANCE := [0.03, 0.07, 0.12, 0.18] # per burst
+const VIEW_RANGE := [60.0, 80.0, 100.0, 120.0]
+const FOV_DEG := [90.0, 100.0, 110.0, 120.0]
+const HEAR_RANGE := [25.0, 30.0, 35.0, 40.0]
+const RECOIL_COMP := [0.2, 0.4, 0.55, 0.7]
+const GRENADE_RATE := [0.01, 0.02, 0.03, 0.035] # chance / s while engaged
 
 var soldier: Soldier
 var match_ref: Node
@@ -27,6 +34,8 @@ var target_since := 0.0
 var last_seen_pos := Vector3.ZERO
 var last_seen_time := -100.0
 var _aim_error := Vector2.ZERO
+var _aim_head := false
+var _wander_seed := 0.0
 var _goal := Vector3.ZERO
 var _goal_time := 0.0
 var _think_t := 0.0
@@ -46,6 +55,7 @@ var _rng := RandomNumberGenerator.new()
 func _ready() -> void:
 	process_physics_priority = -10
 	_rng.randomize()
+	_wander_seed = _rng.randf_range(0.0, 100.0)
 	agent = NavigationAgent3D.new()
 	agent.path_desired_distance = 0.8
 	agent.target_desired_distance = 1.2
@@ -63,8 +73,13 @@ func _on_damaged(info: DamageInfo) -> void:
 		# Turn toward whoever shot us.
 		last_seen_pos = a.global_position
 		last_seen_time = _now()
-		if target == null or _rng.randf() < 0.6:
-			_acquire(a)
+		if target == null or _rng.randf() < 0.4:
+			_acquire(a, not _in_view_cone(a))
+
+
+func _in_view_cone(o: Soldier) -> bool:
+	var to := (o.global_position - soldier.global_position).normalized()
+	return (-soldier.global_basis.z).dot(to) > cos(deg_to_rad(FOV_DEG[difficulty] * 0.5))
 
 
 func _now() -> float:
@@ -134,9 +149,13 @@ func _perceive() -> void:
 		var d := to.length()
 		if d > view_range:
 			continue
-		var heard := (now - o.last_unsuppressed_shot < 1.0 and d < 45.0) or (d < 7.0 and o.sprinting and not o.has_perk("hush"))
+		var heard: bool = (now - o.last_unsuppressed_shot < 1.0 and d < HEAR_RANGE[difficulty]) \
+				or (d < 7.0 and o.sprinting and not o.has_perk("hush"))
 		var in_fov := fwd.dot(to.normalized()) > fov_cos
-		if not in_fov and not heard and o != target:
+		# A bot keeps track of its current target a little past the edge of
+		# its view, but it cannot see behind itself.
+		var tracking := o == target and fwd.dot(to.normalized()) > cos(deg_to_rad(FOV_DEG[difficulty] * 0.5 + 25.0))
+		if not in_fov and not heard and not tracking:
 			continue
 		var aim_pt := o.center_mass()
 		if not Ballistics.has_line_of_sight(soldier, eye, aim_pt) and not Ballistics.has_line_of_sight(soldier, eye, o.head_position()):
@@ -155,7 +174,8 @@ func _perceive() -> void:
 			best = o
 	if best:
 		if best != target:
-			_acquire(best)
+			var to_best := (best.global_position - soldier.global_position).normalized()
+			_acquire(best, fwd.dot(to_best) <= fov_cos)
 		last_seen_pos = best.global_position
 		last_seen_time = now
 	elif target:
@@ -163,11 +183,17 @@ func _perceive() -> void:
 		target = null
 
 
-func _acquire(o: Soldier) -> void:
+func _acquire(o: Soldier, surprised := false) -> void:
 	target = o
-	target_since = _now()
-	var e: float = AIM_ERROR[difficulty]
+	# Reaction time grows with range and when the enemy came from outside the view.
+	var dist := o.global_position.distance_to(soldier.global_position)
+	var delay: float = dist / 10.0 * REACTION_PER_10M[difficulty]
+	if surprised:
+		delay += SURPRISE_DELAY[difficulty]
+	target_since = _now() + delay
+	var e: float = AIM_ERROR[difficulty] * (1.4 if surprised else 1.0)
 	_aim_error = Vector2(_rng.randf_range(-e, e), _rng.randf_range(-e * 0.6, e * 0.6))
+	_aim_head = false
 	_strafe_t = 0.0
 
 
@@ -178,17 +204,26 @@ func _combat(delta: float) -> void:
 	var w := soldier.weapon()
 	var to := target.global_position - soldier.global_position
 	var dist := to.length()
-	# Aim point: chest, sometimes head.
-	var aim_pt := target.center_mass()
-	if _rng.randf() < HEADSHOT_CHANCE[difficulty] * delta * 10.0:
-		aim_pt = target.head_position()
+	# Aim point: chest, sometimes head (chosen once for each burst).
+	var aim_pt := target.head_position() if _aim_head else target.center_mass()
 	_aim_error = _aim_error.lerp(Vector2.ZERO, minf(delta * AIM_SETTLE[difficulty], 1.0))
-	# Moving targets are harder to track.
+	# Tracking error that never settles. It grows when the target moves
+	# across the view, when the bot moves, and at long range.
+	var t := _now() + _wander_seed
 	var tv := target.velocity.length()
-	var wobble := tv * 0.08 * (1.0 - difficulty * 0.2)
-	var err := _aim_error + Vector2(sin(_now() * 3.1) * wobble, cos(_now() * 2.3) * wobble * 0.5)
+	var own_v := Vector2(soldier.velocity.x, soldier.velocity.z).length() / Soldier.WALK_SPEED
+	var wobble: float = AIM_FLOOR[difficulty] + tv * 0.16 * (1.0 - difficulty * 0.15) \
+			+ clampf(own_v, 0.0, 1.5) * MOVE_AIM_PENALTY[difficulty] + dist * 0.01
+	if not soldier.is_on_floor():
+		wobble *= 2.0
+	var err := _aim_error + Vector2(
+			(sin(t * 2.7) + sin(t * 4.3) * 0.5) * wobble * 0.67,
+			(cos(t * 2.1) + cos(t * 3.7) * 0.5) * wobble * 0.4)
 	if soldier.flash_amount > 0.3:
 		err += Vector2(_rng.randf_range(-20, 20), _rng.randf_range(-10, 10)) * soldier.flash_amount
+	# The bot pulls down against only part of the recoil, like a person.
+	var recoil_left: float = 1.0 - RECOIL_COMP[difficulty]
+	err += Vector2(rad_to_deg(soldier.recoil_yaw), rad_to_deg(soldier.recoil_pitch)) * recoil_left
 	var on_target := _aim_at(aim_pt, err, delta)
 
 	var reacted: bool = _now() - target_since > REACTION[difficulty] * (1.0 + soldier.stun_amount)
@@ -196,7 +231,7 @@ func _combat(delta: float) -> void:
 		var cls := w.data.weapon_class
 		var want_ads := dist > 12.0 or cls == "sniper"
 		i.ads = want_ads and w.can_ads()
-		var effective := w.data.range_max * 1.6 if cls != "sniper" else 999.0
+		var effective := w.data.range_max * 1.25 if cls != "sniper" else 999.0
 		if reacted and on_target and dist < effective:
 			if w.data.fire_mode == "auto" and not w.alt_mode:
 				_burst_t -= delta
@@ -206,18 +241,17 @@ func _combat(delta: float) -> void:
 					_burst_pause -= delta
 					if _burst_pause <= 0.0:
 						var long := dist > 30.0
-						_burst_t = _rng.randf_range(0.25, 0.5) if long else _rng.randf_range(0.6, 1.4)
-						_burst_pause = _rng.randf_range(0.15, 0.35) if long else 0.08
+						_burst_t = _rng.randf_range(0.2, 0.4) if long else _rng.randf_range(0.4, 0.9)
+						_burst_pause = _rng.randf_range(0.3, 0.55) if long else _rng.randf_range(0.12, 0.25)
+						_aim_head = _rng.randf() < HEADSHOT_CHANCE[difficulty]
 			else:
 				_semi_t -= delta
 				if _semi_t <= 0.0:
 					i.fire = true
-					_semi_t = _rng.randf_range(0.12, 0.3) * (2.0 - difficulty * 0.3) + (0.5 if cls == "sniper" else 0.0)
+					_semi_t = _rng.randf_range(0.18, 0.35) * (2.0 - difficulty * 0.3) + (0.7 if cls == "sniper" else 0.0)
+					_aim_head = _rng.randf() < HEADSHOT_CHANCE[difficulty]
 				elif w.trigger_prev:
 					i.fire = false
-		# Pull down against recoil.
-		soldier.pitch -= soldier.recoil_pitch * RECOIL_COMP[difficulty] * minf(delta * 10.0, 1.0)
-		soldier.yaw -= soldier.recoil_yaw * RECOIL_COMP[difficulty] * minf(delta * 10.0, 1.0)
 
 	# Knife if close.
 	if dist < 1.7 and soldier.melee_timer <= 0.0:
@@ -279,7 +313,7 @@ func _aim_at(point: Vector3, err_deg: Vector2, delta: float) -> bool:
 	soldier.pitch = clampf(soldier.pitch + clampf(dp, -rate, rate), deg_to_rad(-85), deg_to_rad(85))
 	var remaining := absf(wrapf(want_yaw - soldier.yaw, -PI, PI)) + absf(want_pitch - soldier.pitch)
 	var dist := d.length()
-	var tolerance := atan2(0.6, dist) + deg_to_rad(1.5)
+	var tolerance := atan2(0.45, dist) + deg_to_rad(0.8)
 	return remaining < tolerance
 
 
