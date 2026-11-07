@@ -704,8 +704,8 @@ def _decimated(src, name, tris):
 def _glove_mats(fname, m):
     c = {k: _lin(v) for k, v in GLOVE_COLOURS[fname].items()}
     return [
-        g.material("Gloves", c["palm"], 0.0, 0.62, kind="leather", seed=3.0, crease=0.2),
-        g.material("GloveFabric", c["back"], 0.0, 0.85, kind="fabric", seed=6.0, pattern=-1),
+        g.material("Gloves", c["palm"], 0.0, 0.62, kind="leather", seed=3.0, crease=0.2, wear=0.3),
+        g.material("GloveFabric", c["back"], 0.0, 0.85, kind="fabric", seed=6.0, pattern=-1, wear=0.4),
         g.material("GlovePad", c["pad"], 0.0, 0.5, kind="rubber", seed=7.0),
         g.material("GloveCuff", c["cuff"], 0.0, 0.8, kind="nylon", seed=8.0, pattern=-1),
     ]

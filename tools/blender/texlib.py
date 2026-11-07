@@ -378,7 +378,7 @@ def layers(g, p, masks, dust_on=True):
         dust = g.mul(g.smooth(g.sub(0.6, g.sep(g.position)[2]), 0.0, 0.6), 0.6) if dust_on else 0.0
         col = g.mixc(g.mul(grime, 0.55), col, g.hsv(col, s=0.6, v=0.5))
         col = g.mixc(g.mul(dust, g.smooth(breakup, 0.35, 0.7)), col, (0.2, 0.17, 0.13))
-        col = g.mixc(g.mul(g.smooth(convex, 0.3, 0.9), 0.35), col, g.hsv(col, s=0.7, v=1.35))
+        col = g.mixc(g.mul(g.smooth(convex, 0.3, 0.9), 0.35 * wear_amt), col, g.hsv(col, s=0.7, v=1.35))
         col = g.mixc(g.mul(wrinkle, 0.25), col, g.hsv(col, v=0.75))
         rough = g.add(p["rough"], g.mul(g.sub(weave, 0.5), 0.08))
         return col, rough, 0.0, height, 0.0009 if k == "fabric" else 0.0007
@@ -386,7 +386,7 @@ def layers(g, p, masks, dust_on=True):
         crease = g.smooth(g.noise(70.0, 5.0, 0.6, g.mapping(o, scale=(1.0, 0.4, 1.0)), distortion=0.5), 0.55, 0.65)
         grain = g.voronoi(900.0, "F1", o)
         col = g.mixc(tint, base, g.hsv(base, v=0.7))
-        edge = g.smooth(g.add(convex, g.mul(g.sub(breakup, 0.5), 0.6)), 0.4, 0.8)
+        edge = g.mul(g.smooth(g.add(convex, g.mul(g.sub(breakup, 0.5), 0.6)), 0.4, 0.8), wear_amt)
         col = g.mixc(g.mul(edge, 0.5), col, g.hsv(base, s=0.7, v=1.8))
         dust = g.smooth(g.sub(0.25, g.sep(g.position)[2]), 0.0, 0.2) if dust_on else 0.0
         col = g.mixc(g.mul(g.add(grime, g.mul(dust, 0.7)), 0.5), col, (0.17, 0.145, 0.11))
