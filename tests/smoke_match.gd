@@ -9,6 +9,9 @@ var _duration := 60.0
 var _xp_start := 0
 var _kills_start := 0
 var _started := false
+var _countdown_seen := false
+var _countdown_pos: Dictionary = {}
+var _countdown_ok := true
 
 
 func _ready() -> void:
@@ -30,16 +33,37 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	var m := get_tree().current_scene as Match
+	if m != null and m.pre_match:
+		_countdown_seen = true
+		if _countdown_pos.is_empty():
+			for s in m.soldiers:
+				_countdown_pos[s] = s.global_position
+		return
 	if m == null or not m.in_progress and not m.ended:
 		return
 	if not _started:
 		_started = true
+		_check_countdown_hold()
 		print("Match started: ", m.map.display_name, " / ", m.mode.display_name, "  soldiers=", m.soldiers.size())
 	_t += delta
 	if _t >= _duration or m.ended:
 		var code := _report(m)
 		set_process(false)
 		get_tree().quit(code)
+
+
+## During the countdown, soldiers must not walk away from the spawn point.
+func _check_countdown_hold() -> void:
+	if not _countdown_seen:
+		print("Countdown: not seen")
+		_countdown_ok = false
+		return
+	for s: Soldier in _countdown_pos.keys():
+		var d: Vector3 = s.global_position - _countdown_pos[s]
+		if Vector2(d.x, d.z).length() > 0.5:
+			print("Countdown: %s moved %.2f m" % [s.display_name, Vector2(d.x, d.z).length()])
+			_countdown_ok = false
+	print("Countdown hold: ", "OK" if _countdown_ok else "FAIL")
 
 
 func _report(m: Match) -> int:
@@ -57,7 +81,7 @@ func _report(m: Match) -> int:
 		if stt["count"] > 0:
 			done += 1
 	print("Challenges with progress: ", done)
-	var ok := total_kills > 0
-	print("SMOKE ", "PASS" if ok else "FAIL (no kills)")
+	var ok := total_kills > 0 and _countdown_ok
+	print("SMOKE ", "PASS" if ok else ("FAIL (no kills)" if _countdown_ok else "FAIL (countdown)"))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://smoke_profile.json"))
 	return 0 if ok else 1

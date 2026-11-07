@@ -212,6 +212,8 @@ func _physics_process(delta: float) -> void:
 			bonus_health = 0.0
 
 	_update_look(delta)
+	if match_ref and match_ref.get("pre_match"):
+		_hold_for_countdown()
 	_update_stance()
 	_update_movement(delta)
 	_update_weapon(delta)
@@ -231,6 +233,18 @@ func _physics_process(delta: float) -> void:
 	if input.use_streak and match_ref and match_ref.has_method("use_streak"):
 		match_ref.use_streak(self)
 	input.clear_pulses()
+
+
+## Pre-match: keep look, ADS, reload and weapon swap, block everything else.
+func _hold_for_countdown() -> void:
+	input.move = Vector2.ZERO
+	input.jump = false
+	input.sprint = false
+	input.fire = false
+	input.melee = false
+	input.lethal = false
+	input.tactical = false
+	input.use_streak = false
 
 
 func _update_look(delta: float) -> void:

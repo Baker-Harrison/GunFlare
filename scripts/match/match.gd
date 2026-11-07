@@ -23,6 +23,11 @@ var player_ctrl: PlayerController
 var streaks: StreakManager
 var in_progress := false
 var ended := false
+## Pre-match countdown: soldiers are spawned and can look around, but
+## cannot move, shoot or use equipment until it reaches zero.
+const PRE_MATCH_COUNTDOWN := 10.0
+var pre_match := false
+var countdown := 0.0
 var time_left := 600.0
 var elapsed := 0.0
 var world_env: WorldEnvironment
@@ -144,13 +149,35 @@ func _build() -> void:
 		_spawn(s, true)
 	_loading.get_parent().queue_free()
 	_loading = null
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Sfx.play_music("match", -14.0)
+	countdown = float(config.get("countdown", PRE_MATCH_COUNTDOWN))
+	if countdown > 0.0:
+		pre_match = true
+		print("[match] pre-match countdown ", countdown, " s")
+		hud_banner(mode.display_name.to_upper(), map.display_name, Color(1, 0.85, 0.3), minf(countdown, 4.0))
+	else:
+		_begin_match()
+
+
+func _begin_match() -> void:
+	pre_match = false
+	countdown = 0.0
 	in_progress = true
 	print("[match] in progress")
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	hud_banner(mode.display_name.to_upper(), map.display_name, Color(1, 0.85, 0.3), 4.0)
+	hud_banner("GO!", "%s  —  %s" % [mode.display_name, map.display_name], Color(1, 0.85, 0.3), 2.5)
 	Sfx.play_2d("match_start", -2.0)
-	get_tree().create_timer(1.2).timeout.connect(func() -> void: Sfx.play_2d("vo_match_start", 0.0))
-	Sfx.play_music("match", -14.0)
+	get_tree().create_timer(0.4).timeout.connect(func() -> void: Sfx.play_2d("vo_match_start", 0.0))
+
+
+func _update_countdown(delta: float) -> void:
+	var before := ceili(countdown)
+	countdown -= delta
+	var now_sec := ceili(maxf(countdown, 0.0))
+	if now_sec != before and now_sec > 0 and now_sec <= 5:
+		Sfx.play_ui("tick")
+	if countdown <= 0.0:
+		_begin_match()
 
 
 func _register(s: Soldier) -> void:
@@ -195,8 +222,8 @@ func _resolve_class(sel: Dictionary) -> Dictionary:
 
 func choose_class(sel: Dictionary) -> void:
 	_pending_class = _resolve_class(sel)
-	# Within the first seconds of a life, switch immediately.
-	if player.alive and player.now() - player.spawn_time < 6.0:
+	# Before the match or within the first seconds of a life, switch immediately.
+	if player.alive and (pre_match or player.now() - player.spawn_time < 6.0):
 		_player_class = _pending_class
 		_pending_class = {}
 		player.spawn(player.global_transform, _player_class, _player_elites())
@@ -516,6 +543,9 @@ func _drop_weapon(victim: Soldier) -> void:
 # --- Loop --------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	if pre_match and not ended:
+		_update_countdown(delta)
+		return
 	if not in_progress:
 		return
 	elapsed += delta

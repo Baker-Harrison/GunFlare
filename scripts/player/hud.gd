@@ -582,6 +582,9 @@ func _draw_center_messages(vp: Vector2) -> void:
 		col.a = clampf(p["t"], 0.0, 1.0)
 		_text(Vector2(0, py), p["text"], 22, col, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
 		py -= 30.0
+	var m := player.soldier.match_ref
+	if m and m.get("pre_match"):
+		_draw_countdown(vp, m)
 	if _banner_t > 0.0:
 		var a := clampf(_banner_t, 0.0, 1.0)
 		var col := _banner_color
@@ -589,6 +592,20 @@ func _draw_center_messages(vp: Vector2) -> void:
 		_text(Vector2(0, vp.y * 0.22), _banner, 44, col, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
 		if _banner_sub != "":
 			_text(Vector2(0, vp.y * 0.22 + 36), _banner_sub, 20, Color(1, 1, 1, a), HORIZONTAL_ALIGNMENT_CENTER, vp.x)
+
+
+func _draw_countdown(vp: Vector2, m: Node) -> void:
+	var t: float = maxf(m.get("countdown"), 0.0)
+	var secs := ceili(t)
+	var c := vp * 0.5
+	# The number pops in large at each new second and settles.
+	var frac := t - floorf(t) if t > 0.0 else 0.0
+	var font_size := int(lerpf(72.0, 96.0, clampf(frac * 1.5 - 0.5, 0.0, 1.0)))
+	var col := RED if secs <= 3 else YELLOW
+	# Sit above the crosshair so the player can still aim during the count.
+	canvas.draw_rect(Rect2(0, c.y - 215, vp.x, 150), Color(0, 0, 0, 0.35))
+	_text(Vector2(0, c.y - 183), "MATCH BEGINS IN", 22, WHITE, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
+	_text(Vector2(0, c.y - 95), str(secs), font_size, col, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
 
 
 func _draw_scoreboard(vp: Vector2, m: Node) -> void:
