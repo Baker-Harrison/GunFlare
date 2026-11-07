@@ -288,7 +288,8 @@ func _aim_at(point: Vector3, err_deg: Vector2, delta: float) -> bool:
 func _roam(delta: float) -> void:
 	if _goal_time <= 0.0 or soldier.global_position.distance_to(_goal) < 2.5 or agent.is_navigation_finished():
 		_goal = _pick_goal()
-		_goal_time = _rng.randf_range(10.0, 25.0)
+		var objective_mode: bool = match_ref.mode.id in ["dom", "kc", "hq"]
+		_goal_time = _rng.randf_range(3.0, 7.0) if objective_mode else _rng.randf_range(10.0, 25.0)
 		agent.target_position = _goal
 	_goal_time -= delta
 	_move_to(_goal, delta, true)

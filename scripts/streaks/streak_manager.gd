@@ -39,6 +39,7 @@ func _earn(s: Soldier, id: String) -> void:
 		var st := ContentDB.get_item(id)
 		match_ref.hud_banner(st.display_name.to_upper() + " READY", "Press [4] to use", Color(0.6, 1.0, 0.6), 3.0)
 		Sfx.play_2d("streak_ready", -2.0)
+		Sfx.play_2d("vo_streak_ready", 0.0)
 		GameEvents.report("streak_earned", {"streak": id, "perks": s.perks})
 
 
@@ -117,6 +118,8 @@ func activate(s: Soldier, id: String) -> bool:
 			var pos := s.global_position - s.global_basis.z * 1.5
 			st.global_position = _ground(pos)
 			st.rotation.y = s.yaw
+			if s.is_player:
+				Sfx.play_2d("vo_sentry", 0.0)
 		"strafing_run":
 			var p := _aim_point(s)
 			var dir := -s.global_basis.z
@@ -160,6 +163,7 @@ func activate(s: Soldier, id: String) -> bool:
 			_doomsday_owner = s
 			match_ref.hud_banner("DOOMSDAY INBOUND", "", Color(1, 0.3, 0.2), 10.0)
 			Sfx.play_2d("doomsday_siren", 0.0)
+			Sfx.play_2d("vo_doomsday", 2.0)
 		_:
 			return false
 	return true
@@ -229,6 +233,8 @@ func _call_crate(s: Soldier) -> void:
 	heli.deliver(drop)
 	if _friendly(s):
 		match_ref.hud_popup("SUPPLY CRATE INBOUND", Color(0.5, 0.9, 1.0))
+		if s.is_player:
+			Sfx.play_2d("vo_crate", 0.0)
 	var t := get_tree().create_timer(5.0, false)
 	t.timeout.connect(func() -> void:
 		if match_ref.ended:

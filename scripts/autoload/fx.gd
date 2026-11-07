@@ -226,12 +226,18 @@ func impact(pos: Vector3, normal: Vector3, surface: String) -> void:
 	match surface:
 		"metal", "sheet_metal":
 			_emit("sparks", pos, normal)
+			if randf() < 0.35:
+				_emit("dust", pos, normal)
 		"wood":
 			_emit("wood", pos, normal)
 			_emit("dust", pos, normal)
+			if randf() < 0.5:
+				_emit("debris", pos, normal)
 		_:
 			_emit("dust", pos, normal)
-			if randf() < 0.4:
+			if randf() < 0.6:
+				_emit("debris", pos, normal)
+			if randf() < 0.35:
 				_emit("sparks", pos, normal)
 	_place_decal(pos, normal, _tex_hole, randf_range(0.08, 0.13))
 	if randf() < 0.5:

@@ -79,11 +79,13 @@ func setup_environment(preset: String) -> void:
 	env.glow_bloom = 0.05
 	env.glow_hdr_threshold = 1.2
 	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.6
+	env.ssao_radius = 1.4
+	env.ssao_intensity = 1.25
+	env.ssao_power = 1.5
+	env.ssao_detail = 0.5
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
-	env.fog_sky_affect = 0.25
+	env.fog_sky_affect = 0.35
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.08
 	env.adjustment_saturation = 1.0
@@ -132,7 +134,7 @@ func setup_environment(preset: String) -> void:
 			sun.light_energy = 1.1
 			env.ambient_light_energy = 1.1
 			env.fog_light_color = Color(0.82, 0.86, 0.92)
-			env.fog_density = 0.009
+			env.fog_density = 0.0045
 			env.adjustment_saturation = 0.85
 		"dusk":
 			sky_mat.sky_top_color = Color(0.18, 0.24, 0.42)
@@ -146,17 +148,31 @@ func setup_environment(preset: String) -> void:
 			env.fog_light_color = Color(0.7, 0.45, 0.35)
 			env.fog_density = 0.005
 		"night":
-			sky_mat.sky_top_color = Color(0.02, 0.03, 0.06)
-			sky_mat.sky_horizon_color = Color(0.08, 0.1, 0.16)
+			sky_mat.sky_top_color = Color(0.03, 0.05, 0.1)
+			sky_mat.sky_horizon_color = Color(0.14, 0.17, 0.25)
 			sky_mat.ground_horizon_color = Color(0.05, 0.06, 0.08)
 			sky_mat.ground_bottom_color = Color(0.02, 0.02, 0.03)
 			sky_mat.sun_angle_max = 2.0
 			sun.rotation_degrees = Vector3(-40, 30, 0)
 			sun.light_color = Color(0.55, 0.65, 0.9)
-			sun.light_energy = 0.32
-			env.ambient_light_energy = 0.45
-			env.fog_light_color = Color(0.1, 0.12, 0.18)
-			env.fog_density = 0.01
+			sun.light_energy = 0.55
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			env.ambient_light_color = Color(0.32, 0.36, 0.48)
+			env.ambient_light_energy = 0.9
+			env.fog_light_color = Color(0.12, 0.14, 0.2)
+			env.fog_density = 0.006
+			env.tonemap_exposure = 1.25
+		"temperate":
+			sky_mat.sky_top_color = Color(0.25, 0.45, 0.75)
+			sky_mat.sky_horizon_color = Color(0.7, 0.76, 0.8)
+			sky_mat.ground_horizon_color = Color(0.45, 0.5, 0.4)
+			sky_mat.ground_bottom_color = Color(0.2, 0.24, 0.16)
+			sun.rotation_degrees = Vector3(-42, 140, 0)
+			sun.light_color = Color(1.0, 0.95, 0.86)
+			sun.light_energy = 1.35
+			env.ambient_light_energy = 0.85
+			env.fog_light_color = Color(0.6, 0.68, 0.72)
+			env.fog_density = 0.006
 		_:
 			sun.rotation_degrees = Vector3(-50, 30, 0)
 	sky_mat.sun_curve = 0.1
@@ -192,12 +208,13 @@ func box(pos: Vector3, sz: Vector3, mat_id: String, rot_y := 0.0, minimap := tru
 	body.set_meta("surface", Materials.surface(mat_id))
 	if penetrable or Materials.surface(mat_id) in ["wood", "plaster", "sheet_metal"]:
 		body.set_meta("penetrable", true)
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = sz
-	mi.mesh = bm
-	mi.material_override = Materials.get_mat(mat_id)
-	body.add_child(mi)
+	if not _collision_only:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = sz
+		mi.mesh = bm
+		mi.material_override = Materials.get_mat(mat_id)
+		body.add_child(mi)
 	var cs := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
 	shape.size = sz
@@ -218,6 +235,8 @@ func _minimap_box(pos: Vector3, sz: Vector3, rot_y: float) -> void:
 
 ## Visual-only mesh box (no collision), e.g. trims, window frames.
 func deco(pos: Vector3, sz: Vector3, mat_id: String, rot_y := 0.0) -> MeshInstance3D:
+	if _collision_only:
+		return null
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
 	bm.size = sz
@@ -254,10 +273,28 @@ func wall(a: Vector2, b: Vector2, base_y: float, height: float, thick: float, ma
 		seg.call(cursor, start, 0.0, height)
 		seg.call(start, end, 0.0, bottom)
 		seg.call(start, end, top, height)
-		# Frame
+		# Architectural frames: window or door
+		var mid2 := a + n * ((start + end) * 0.5)
+		var span := end - start
 		if bottom > 0.1:
-			var mid2 := a + n * ((start + end) * 0.5)
-			deco(Vector3(mid2.x, base_y + bottom - 0.05, mid2.y), Vector3(end - start + 0.1, 0.06, thick + 0.12), "concrete_dark", rot)
+			# Window sill (bottom)
+			deco(Vector3(mid2.x, base_y + bottom - 0.04, mid2.y), Vector3(span + 0.14, 0.07, thick + 0.14), "concrete_dark", rot)
+			# Window lintel (top)
+			deco(Vector3(mid2.x, base_y + top + 0.04, mid2.y), Vector3(span + 0.14, 0.07, thick + 0.12), "concrete_dark", rot)
+			# Side jambs
+			var p_l := a + n * (start + 0.03)
+			var p_r := a + n * (end - 0.03)
+			var win_h := top - bottom
+			deco(Vector3(p_l.x, base_y + bottom, p_l.y), Vector3(0.06, win_h, thick + 0.06), "concrete_dark", rot)
+			deco(Vector3(p_r.x, base_y + bottom, p_r.y), Vector3(0.06, win_h, thick + 0.06), "concrete_dark", rot)
+		else:
+			# Doorway top header lintel
+			deco(Vector3(mid2.x, base_y + top + 0.04, mid2.y), Vector3(span + 0.14, 0.08, thick + 0.10), "concrete_dark", rot)
+			# Doorway side jambs
+			var p_l := a + n * (start + 0.03)
+			var p_r := a + n * (end - 0.03)
+			deco(Vector3(p_l.x, base_y, p_l.y), Vector3(0.06, top, thick + 0.06), "concrete_dark", rot)
+			deco(Vector3(p_r.x, base_y, p_r.y), Vector3(0.06, top, thick + 0.06), "concrete_dark", rot)
 		cursor = end
 	seg.call(cursor, length, 0.0, height)
 
@@ -304,8 +341,9 @@ func building(rect: Rect2, floors: int, floor_h: float, wall_mat: String, opts: 
 		# Floor slab for upper floors, with a hole over the stairs below.
 		if f > 0:
 			_slab(rect, y - 0.25, 0.25, floor_mat, _stair_rect(rect, floor_h, stairs_side, f - 1) if stairs_side != "" else Rect2())
-	# Ground floor
+	# Ground floor & foundation skirt
 	box(Vector3(rect.get_center().x, base_y - 0.05, rect.get_center().y), Vector3(rect.size.x, 0.1, rect.size.y), floor_mat, 0.0, false)
+	deco(Vector3(rect.get_center().x, base_y + 0.10, rect.get_center().y), Vector3(rect.size.x + 0.18, 0.20, rect.size.y + 0.18), "concrete_dark")
 	# Roof
 	var roof_y := base_y + floors * floor_h
 	if roof_access:
@@ -318,6 +356,7 @@ func building(rect: Rect2, floors: int, floor_h: float, wall_mat: String, opts: 
 			wall(a2 + nn * 0.15 - dir2 * 0.15, b2 + nn * 0.15 + dir2 * 0.15, roof_y, 1.0, 0.3, wall_mat)
 	else:
 		box(Vector3(rect.get_center().x, roof_y - 0.25, rect.get_center().y), Vector3(rect.size.x + 0.4, 0.35, rect.size.y + 0.4), opts.get("roof_mat", "roof"), 0.0, false)
+		deco(Vector3(rect.get_center().x, roof_y + 0.08, rect.get_center().y), Vector3(rect.size.x + 0.52, 0.18, rect.size.y + 0.52), "concrete_dark")
 	if stairs_side != "":
 		var levels := floors - 1 + (1 if roof_access else 0)
 		for f in levels:
@@ -403,8 +442,9 @@ func ramp(from: Vector3, to: Vector3, width: float, mat_id := "concrete") -> voi
 	geometry.add_child(body)
 
 
-func ground(mat_id: String, extra := 40.0) -> void:
-	box(Vector3(0, -1.0, 0), Vector3(size.x + extra * 2, 1.0, size.y + extra * 2), mat_id, 0.0, false)
+func ground(mat_id: String, extra := 40.0, with_floor := true) -> void:
+	if with_floor:
+		box(Vector3(0, -1.0, 0), Vector3(size.x + extra * 2, 1.0, size.y + extra * 2), mat_id, 0.0, false)
 	# Invisible boundary
 	for side in 4:
 		var b := StaticBody3D.new()
@@ -422,15 +462,37 @@ func ground(mat_id: String, extra := 40.0) -> void:
 
 # --- Props -------------------------------------------------------------------
 
+## Visual-only mode: geometry helpers build collision/minimap but no meshes
+## (used when a Blender model supplies the visuals for a prop).
+var _collision_only := false
+
+
+func _prop_model_path(kind: String) -> String:
+	var base := "res://assets/props/%s" % kind
+	if ResourceLoader.exists(base + ".glb"):
+		return base + ".glb"
+	var variants: Array[String] = []
+	for i in range(1, 6):
+		if ResourceLoader.exists("%s_%d.glb" % [base, i]):
+			variants.append("%s_%d.glb" % [base, i])
+	if variants.is_empty():
+		return ""
+	return variants[_rng.randi() % variants.size()]
+
+
 func prop(kind: String, pos: Vector3, rot_y := 0.0) -> void:
-	var path := "res://assets/props/%s.glb" % kind
-	if ResourceLoader.exists(path):
+	var path := _prop_model_path(kind)
+	if path != "":
 		var inst := (load(path) as PackedScene).instantiate() as Node3D
 		inst.position = pos
 		inst.rotation.y = rot_y
 		geometry.add_child(inst)
-		_add_prop_collision(kind, pos, rot_y)
-		return
+		_collision_only = true
+	_prop_procedural(kind, pos, rot_y)
+	_collision_only = false
+
+
+func _prop_procedural(kind: String, pos: Vector3, rot_y: float) -> void:
 	match kind:
 		"crate":
 			box(pos, Vector3(1.2, 1.2, 1.2), "wood", rot_y, false, true)
@@ -467,6 +529,8 @@ func prop(kind: String, pos: Vector3, rot_y := 0.0) -> void:
 				_cyl_body(pos + Vector3(0, i * 0.25, 0), 0.4, 0.25, "black_rubber")
 		"tree":
 			_cyl_body(pos, 0.22, 3.5, "wood_dark")
+			if _collision_only:
+				return
 			var leaves := MeshInstance3D.new()
 			var sm := SphereMesh.new()
 			sm.radius = 2.0
@@ -477,6 +541,8 @@ func prop(kind: String, pos: Vector3, rot_y := 0.0) -> void:
 			geometry.add_child(leaves)
 		"pine":
 			_cyl_body(pos, 0.2, 2.0, "wood_dark")
+			if _collision_only:
+				return
 			for i in 3:
 				var cone := MeshInstance3D.new()
 				var cm := CylinderMesh.new()
@@ -491,7 +557,7 @@ func prop(kind: String, pos: Vector3, rot_y := 0.0) -> void:
 			_cyl_body(pos, 0.08, 5.0, "metal")
 			deco(pos + Vector3(0, 5.0, 0), Vector3(0.4, 0.15, 0.4), "metal")
 			var l := OmniLight3D.new()
-			l.position = pos + Vector3(0, 4.8, 0)
+			l.position = pos + Vector3(0, 4.7, 0) + (Vector3(0, 0, -0.85).rotated(Vector3.UP, rot_y) if _collision_only else Vector3.ZERO)
 			l.light_color = Color(1.0, 0.85, 0.6)
 			l.light_energy = 2.0
 			l.omni_range = 12.0
@@ -522,6 +588,52 @@ func prop(kind: String, pos: Vector3, rot_y := 0.0) -> void:
 			_cyl_body(pos, 2.0, 4.0, "metal")
 		"pipe":
 			var p := box(pos, Vector3(0.6, 0.6, 12.0), "metal_rust", rot_y)
+		"truck":
+			box(pos + Vector3(0, 0.5, 2.0).rotated(Vector3.UP, rot_y), Vector3(2.4, 2.1, 2.2), "container_blue", rot_y)
+			box(pos + Vector3(0, 0.9, -1.4).rotated(Vector3.UP, rot_y), Vector3(2.5, 2.6, 5.0), "sheet_metal", rot_y)
+			box(pos + Vector3(0, 0.2, 0).rotated(Vector3.UP, rot_y), Vector3(2.2, 0.7, 7.6), "concrete_dark", rot_y, false)
+		"bus":
+			box(pos + Vector3(0, 0.45, 0), Vector3(2.5, 2.7, 11.0), "yellow_paint", rot_y)
+			deco(pos + Vector3(0, 1.8, 0), Vector3(2.55, 0.8, 10.4), "glass", rot_y)
+		"tent":
+			box(pos, Vector3(4.0, 0.1, 5.0), "fabric_tan", rot_y, false)
+			for s in [-1, 1]:
+				var t := box(pos + Vector3(s * 1.0, 0.0, 0).rotated(Vector3.UP, rot_y), Vector3(2.5, 0.08, 5.0), "fabric_tan", rot_y, false, true)
+				t.position.y += 1.2
+				t.rotate_object_local(Vector3.FORWARD, s * 0.85)
+			_minimap_box(pos, Vector3(4.0, 2.4, 5.0), rot_y)
+		"tank_large":
+			_cyl_body(pos, 5.0, 7.0, "metal")
+			_cyl_body(pos + Vector3(0, 7.0, 0), 4.6, 0.6, "metal_rust")
+			minimap_rects.append(Rect2(pos.x - 5, pos.z - 5, 10, 10))
+		"crane":
+			for c in [Vector3(-4, 0, -4), Vector3(4, 0, -4), Vector3(-4, 0, 4), Vector3(4, 0, 4)]:
+				box(pos + c.rotated(Vector3.UP, rot_y), Vector3(0.8, 22.0, 0.8), "yellow_paint", rot_y)
+			box(pos + Vector3(0, 22.0, 0), Vector3(10.0, 1.5, 10.0), "yellow_paint", rot_y, false)
+			box(pos + Vector3(0, 23.5, 0).rotated(Vector3.UP, rot_y), Vector3(2.0, 1.2, 40.0), "yellow_paint", rot_y, false)
+		"plane":
+			box(pos + Vector3(0, 1.2, 0), Vector3(4.0, 4.0, 28.0), "metal", rot_y)
+			box(pos + Vector3(0, 2.6, 2.0), Vector3(32.0, 0.5, 5.0), "metal", rot_y, false)
+			box(pos + Vector3(0, 3.0, 12.5).rotated(Vector3.UP, rot_y), Vector3(0.4, 6.0, 3.5), "metal", rot_y, false)
+			for s in [-1, 1]:
+				_cyl_body(pos + Vector3(s * 7.0, 1.0, 1.0).rotated(Vector3.UP, rot_y), 1.0, 1.2, "concrete_dark")
+		"pipe_rack":
+			for i in 4:
+				box(pos + Vector3(0, 0, i * 4.0 - 6.0).rotated(Vector3.UP, rot_y), Vector3(4.0, 0.3, 0.3), "metal_rust", rot_y, false)
+				for s in [-1, 1]:
+					box(pos + Vector3(s * 1.9, 0, i * 4.0 - 6.0).rotated(Vector3.UP, rot_y), Vector3(0.3, 3.5, 0.3), "metal_rust", rot_y, false)
+			for s in [-1.2, 0.0, 1.2]:
+				var pp := box(pos + Vector3(s, 3.5, 0).rotated(Vector3.UP, rot_y), Vector3(0.6, 0.6, 16.0), "metal", rot_y, false)
+		"guard_tower":
+			for c in [Vector3(-1.2, 0, -1.2), Vector3(1.2, 0, -1.2), Vector3(-1.2, 0, 1.2), Vector3(1.2, 0, 1.2)]:
+				box(pos + c, Vector3(0.25, 5.0, 0.25), "wood_dark", 0.0, false)
+			box(pos + Vector3(0, 5.0, 0), Vector3(3.2, 0.2, 3.2), "wood", 0.0, false)
+			for side in 4:
+				var d := Vector3(0, 0, 1.55).rotated(Vector3.UP, side * PI * 0.5)
+				box(pos + Vector3(0, 5.2, 0) + d, Vector3(3.2, 1.1, 0.12) if side % 2 == 0 else Vector3(0.12, 1.1, 3.2), "wood", 0.0, false, true)
+			box(pos + Vector3(0, 7.4, 0), Vector3(3.6, 0.15, 3.6), "sheet_metal", 0.0, false)
+			ramp(pos + Vector3(0, 0, 4.5), pos + Vector3(0, 5.0, 1.6), 1.0, "wood")
+			minimap_rects.append(Rect2(pos.x - 1.6, pos.z - 1.6, 3.2, 3.2))
 		_:
 			box(pos, Vector3(1, 1, 1), "concrete", rot_y)
 
@@ -572,14 +684,15 @@ func _cyl_body(pos: Vector3, r: float, h: float, mat_id: String) -> void:
 	body.collision_layer = Layers.WORLD
 	body.position = pos + Vector3(0, h * 0.5, 0)
 	body.set_meta("surface", Materials.surface(mat_id))
-	var mi := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = r
-	cm.bottom_radius = r
-	cm.height = h
-	mi.mesh = cm
-	mi.material_override = Materials.get_mat(mat_id)
-	body.add_child(mi)
+	if not _collision_only:
+		var mi := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = r
+		cm.bottom_radius = r
+		cm.height = h
+		mi.mesh = cm
+		mi.material_override = Materials.get_mat(mat_id)
+		body.add_child(mi)
 	var cs := CollisionShape3D.new()
 	var sh := CylinderShape3D.new()
 	sh.radius = r
@@ -592,6 +705,8 @@ func _cyl_body(pos: Vector3, r: float, h: float, mat_id: String) -> void:
 func _car(pos: Vector3, rot_y: float, paint: String, wrecked := false) -> void:
 	var lower := box(pos + Vector3(0, 0.3, 0), Vector3(1.85, 0.75, 4.4), paint, rot_y)
 	box(pos + Vector3(0, 1.05, 0.2).rotated(Vector3.UP, rot_y), Vector3(1.7, 0.55 if not wrecked else 0.35, 2.3), "glass" if not wrecked else paint, rot_y, false)
+	if _collision_only:
+		return
 	for c in [Vector3(-0.85, 0, -1.4), Vector3(0.85, 0, -1.4), Vector3(-0.85, 0, 1.4), Vector3(0.85, 0, 1.4)]:
 		var w := MeshInstance3D.new()
 		var cm := CylinderMesh.new()

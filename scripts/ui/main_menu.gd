@@ -3,12 +3,15 @@ extends Control
 ## Front end: Play (match setup), Create-a-Class, Barracks, Options.
 
 var _content: Control
+var _showcase: WeaponShowcase
 var _card: VBoxContainer
 var _cfg := {"mode": "tdm", "map": "dustline", "bots": 11, "difficulty": 1, "class": {"source": "preset", "index": 0}}
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	size = get_viewport_rect().size
+	get_viewport().size_changed.connect(func() -> void: size = get_viewport_rect().size)
 	theme = UiKit.theme()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_cfg["difficulty"] = int(Settings.get_value("bot_difficulty"))
@@ -39,6 +42,11 @@ func _ready() -> void:
 	add_child(scroll)
 	_content = UiKit.vbox(10)
 	scroll.add_child(_content)
+	_showcase = WeaponShowcase.new()
+	_showcase.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	_showcase.position = Vector2(-980, -240)
+	_showcase.size = Vector2(900, 520)
+	add_child(_showcase)
 	_home()
 	Sfx.play_music("menu", -8.0)
 
@@ -67,6 +75,14 @@ func _update_card() -> void:
 
 func _home() -> void:
 	UiKit.clear(_content)
+	_showcase.visible = true
+	var cls: Dictionary = ContentDB.PRESET_CLASSES[0]
+	var sel: Dictionary = _cfg.get("class", {})
+	if sel.get("source") == "custom" and sel.get("index", 0) < Progression.classes.size():
+		cls = Progression.classes[sel["index"]]
+	elif sel.get("source") == "preset":
+		cls = ContentDB.PRESET_CLASSES[clampi(sel.get("index", 0), 0, ContentDB.PRESET_CLASSES.size() - 1)]
+	_showcase.show_weapon(cls["primary"], cls.get("primary_attachments", []), cls.get("primary_camo", ""))
 	_content.add_child(UiKit.button("PLAY", _play, 30, 420))
 	_content.add_child(UiKit.button("CREATE-A-CLASS", func() -> void: _open(CreateAClass.new()), 30, 420))
 	_content.add_child(UiKit.button("BARRACKS", func() -> void: _open(Barracks.new()), 30, 420))
@@ -80,6 +96,7 @@ func _home() -> void:
 
 func _open(screen: Control) -> void:
 	UiKit.clear(_content)
+	_showcase.visible = false
 	_content.add_child(screen)
 	if screen.has_signal("closed"):
 		screen.closed.connect(func() -> void:
@@ -89,6 +106,7 @@ func _open(screen: Control) -> void:
 
 func _options() -> void:
 	UiKit.clear(_content)
+	_showcase.visible = false
 	_content.add_child(UiKit.label("OPTIONS", 40, UiKit.TEXT, true))
 	_content.add_child(OptionsPanel.new())
 	_content.add_child(UiKit.button("BACK", func() -> void:
@@ -98,6 +116,7 @@ func _options() -> void:
 
 func _play() -> void:
 	UiKit.clear(_content)
+	_showcase.visible = false
 	_content.add_child(UiKit.label("MATCH SETUP", 40, UiKit.TEXT, true))
 	var cols := UiKit.hbox(30)
 	_content.add_child(cols)

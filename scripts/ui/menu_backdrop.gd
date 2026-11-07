@@ -17,7 +17,7 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var s := size
+	var s := get_viewport_rect().size
 	var steps := 24
 	for i in steps:
 		var f := float(i) / steps

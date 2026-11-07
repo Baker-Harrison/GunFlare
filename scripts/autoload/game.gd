@@ -16,6 +16,9 @@ func _ready() -> void:
 		var shot := args.find("--shots")
 		if shot >= 0:
 			_capture_shots.call_deferred(args[shot + 1], int(args[shot + 2]) if args.size() > shot + 2 else 4)
+	elif args.has("--shots"):
+		var i := args.find("--shots")
+		_capture_shots.call_deferred(args[i + 1], 1)
 
 
 ## Dev tool: saves a few screenshots during a match, then quits.

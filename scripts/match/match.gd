@@ -149,6 +149,7 @@ func _build() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	hud_banner(mode.display_name.to_upper(), map.display_name, Color(1, 0.85, 0.3), 4.0)
 	Sfx.play_2d("match_start", -2.0)
+	get_tree().create_timer(1.2).timeout.connect(func() -> void: Sfx.play_2d("vo_match_start", 0.0))
 	Sfx.play_music("match", -14.0)
 
 
@@ -518,8 +519,12 @@ func _process(delta: float) -> void:
 	if not in_progress:
 		return
 	elapsed += delta
+	var before := time_left
 	time_left -= delta
+	if before > 60.0 and time_left <= 60.0:
+		Sfx.play_2d("vo_one_minute", 0.0)
 	mode.update(delta)
+	_announce_lead()
 	if time_left <= 0.0:
 		time_left = 0.0
 		end_match()
@@ -557,6 +562,27 @@ func _update_player_interact() -> void:
 		player_ctrl.hud.set_interact("")
 
 
+var _lead_state := 0
+
+
+## "We are winning / losing" when the lead changes hands by a margin.
+func _announce_lead() -> void:
+	if not mode.team_based:
+		return
+	var mine: int = mode.scores[player.team]
+	var theirs: int = mode.scores[1 - player.team]
+	var margin := maxi(mode.score_limit / 8, 3)
+	var state := 0
+	if mine - theirs >= margin:
+		state = 1
+	elif theirs - mine >= margin:
+		state = -1
+	if state != 0 and state != _lead_state:
+		Sfx.play_2d("vo_winning" if state > 0 else "vo_losing", 0.0)
+	if state != 0:
+		_lead_state = state
+
+
 func use_streak(s: Soldier) -> void:
 	streaks.use(s)
 
@@ -567,6 +593,7 @@ func announce_capture(label: String, team: int, cappers: Array) -> void:
 	var ours := team == player.team
 	hud_banner("%s CAPTURED" % label if label == "HQ" else "FLAG %s CAPTURED" % label, "", TEAM_COLORS[0] if ours else TEAM_COLORS[1], 2.5)
 	Sfx.play_2d("capture_friendly" if ours else "capture_enemy", -4.0)
+	Sfx.play_2d("vo_flag_taken" if ours else "vo_flag_lost", 0.0)
 	for s: Soldier in cappers:
 		add_personal_score(s, 150)
 		if s.is_player:
@@ -719,6 +746,7 @@ func end_match(winner_override := -2) -> void:
 	if ChallengeTracker.tier_completed.is_connected(_on_challenge_tier):
 		ChallengeTracker.tier_completed.disconnect(_on_challenge_tier)
 	Sfx.play_2d("victory" if won else "defeat", -2.0)
+	Sfx.play_2d("vo_victory" if won else "vo_defeat", 0.0)
 	Sfx.stop_music()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var screen := EndScreen.new()

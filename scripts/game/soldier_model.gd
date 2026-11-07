@@ -115,6 +115,15 @@ func _capsule(r: float, h: float) -> CapsuleMesh:
 	return c
 
 
+func _sphere(r: float) -> SphereMesh:
+	var s := SphereMesh.new()
+	s.radius = r
+	s.height = r * 2.0
+	s.radial_segments = 12
+	s.rings = 6
+	return s
+
+
 func _box(size: Vector3) -> BoxMesh:
 	var b := BoxMesh.new()
 	b.size = size
@@ -182,9 +191,11 @@ func _build_rig() -> void:
 	chest = _joint(torso, "Chest", Vector3(0, 0.52, 0))
 	for side in [-1, 1]:
 		var sh := _joint(chest, "Shoulder", Vector3(0.23 * side, 0.02, 0))
+		_part(sh, _sphere(0.075), vest, Vector3.ZERO) # shoulder socket cap
 		_part(sh, _capsule(0.065, 0.32), fatigue, Vector3(0, -0.14, 0))
 		_part(sh, _box(Vector3(0.13, 0.1, 0.14)), vest, Vector3(0, -0.02, 0)) # shoulder pad
 		var el := _joint(sh, "Elbow", Vector3(0, -0.29, 0))
+		_part(el, _sphere(0.06), fatigue, Vector3.ZERO) # elbow socket cap
 		_part(el, _capsule(0.055, 0.3), fatigue, Vector3(0, -0.13, 0))
 		_part(el, _box(Vector3(0.08, 0.1, 0.11)), gloves, Vector3(0, -0.3, 0))
 		_hitbox(sh, "limb", _box_shape(Vector3(0.14, 0.34, 0.14)), Vector3(0, -0.14, 0))
@@ -194,9 +205,11 @@ func _build_rig() -> void:
 
 	for side in [-1, 1]:
 		var hip := _joint(pelvis, "Hip", Vector3(0.11 * side, -0.06, 0))
+		_part(hip, _sphere(0.095), dark, Vector3.ZERO) # hip socket cap
 		_part(hip, _capsule(0.085, 0.48), fatigue, Vector3(0, -0.22, 0))
 		_part(hip, _box(Vector3(0.1, 0.14, 0.08)), vest, Vector3(0.07 * side, -0.18, -0.03)) # thigh pocket
 		var knee := _joint(hip, "Knee", Vector3(0, -0.44, 0))
+		_part(knee, _sphere(0.075), vest, Vector3.ZERO) # knee socket cap
 		_part(knee, _capsule(0.07, 0.46), fatigue, Vector3(0, -0.21, 0))
 		_part(knee, _box(Vector3(0.1, 0.09, 0.1)), vest, Vector3(0, 0.0, -0.06)) # knee pad
 		_part(knee, _box(Vector3(0.11, 0.12, 0.27)), boots, Vector3(0, -0.44, -0.04))
@@ -204,6 +217,54 @@ func _build_rig() -> void:
 		_hitbox(knee, "limb", _box_shape(Vector3(0.16, 0.48, 0.2)), Vector3(0, -0.24, 0))
 		hips.append(hip)
 		knees.append(knee)
+	_apply_character_model(fatigue)
+
+
+const CHARACTER_FILES := ["res://assets/characters/soldier_sentinel.glb", "res://assets/characters/soldier_militia.glb"]
+static var _char_scenes: Dictionary = {}
+
+
+## Swap primitive meshes for the faction's modelled body parts when available.
+func _apply_character_model(fatigue: Material) -> void:
+	var path: String = CHARACTER_FILES[faction]
+	if not ResourceLoader.exists(path):
+		return
+	if not _char_scenes.has(path):
+		_char_scenes[path] = (load(path) as PackedScene).instantiate()
+	var src: Node = _char_scenes[path]
+	for mi in _meshes:
+		mi.queue_free()
+	_meshes.clear()
+	var attach := func(joint: Node3D, part: String) -> void:
+		var n := src.find_child(part, true, false)
+		if n == null:
+			return
+		var copy := n.duplicate() as Node3D
+		copy.transform = Transform3D.IDENTITY
+		copy.set_meta("part", true)
+		joint.add_child(copy)
+		_collect_meshes(copy, fatigue)
+	attach.call(pelvis, "Pelvis")
+	attach.call(torso, "Torso")
+	attach.call(head_node, "Head")
+	for i in 2:
+		attach.call(shoulders[i], "UpperArm")
+		attach.call(elbows[i], "Forearm")
+		attach.call(hips[i], "Thigh")
+		attach.call(knees[i], "Shin")
+
+
+func _collect_meshes(n: Node, fatigue: Material) -> void:
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		_meshes.append(mi)
+		if mi.mesh:
+			for i in mi.mesh.get_surface_count():
+				var m := mi.mesh.surface_get_material(i)
+				if m and m.resource_name == "Fatigue":
+					mi.set_surface_override_material(i, fatigue)
+	for c in n.get_children():
+		_collect_meshes(c, fatigue)
 
 
 func _box_shape(size: Vector3) -> BoxShape3D:
@@ -274,14 +335,17 @@ func _process(delta: float) -> void:
 	_jump_t = move_toward(_jump_t, 0.0, delta * 2.0)
 	_lean = lerpf(_lean, clampf(-local_v.x * 0.03, -0.12, 0.12), delta * 6.0)
 
-	var stride := 2.6 if soldier.sprinting else 1.8
-	_phase += speed * delta / stride * TAU * 0.5
-	var amt := clampf(speed / 4.0, 0.0, 1.0) * (1.0 - _prone)
-	var swing := sin(_phase) * (0.75 if soldier.sprinting else 0.5) * amt
+	var stride := 2.4 if soldier.sprinting else 1.6
+	if speed > 0.15:
+		_phase += (speed * delta / stride) * TAU * 0.5
+	else:
+		_phase = move_toward(_phase, roundf(_phase / PI) * PI, delta * 9.0)
+	var amt := clampf(speed / (stride * 1.6), 0.0, 1.0) * (1.0 - _prone)
+	var swing := sin(_phase) * (0.68 if soldier.sprinting else 0.48) * amt
 	var dir_sign := -1.0 if local_v.z > 0.2 else 1.0 # walking backwards
 
 	# Pelvis height / body orientation per stance.
-	var bob := absf(cos(_phase)) * 0.04 * amt
+	var bob := absf(cos(_phase)) * 0.035 * amt
 	var pelvis_y := lerpf(0.95, 0.6, _crouch)
 	pelvis_y = lerpf(pelvis_y, 0.2, _prone) + bob
 	if not on_floor:
@@ -291,9 +355,10 @@ func _process(delta: float) -> void:
 
 	var sprint_lean := 0.22 if soldier.sprinting else 0.0
 	var aim_pitch := soldier.pitch
-	torso.rotation = Vector3(-lerpf(sprint_lean + 0.05 * amt, 0.0, _prone) + _crouch * 0.15 - aim_pitch * 0.25 * (1.0 - _prone), 0.0, 0.0)
-	chest.rotation = Vector3(aim_pitch * lerpf(0.75, 0.0, _prone) + _fire_kick * 0.06 + (PI * 0.5 * _prone), 0.0, 0.0)
-	head_node.rotation = Vector3(aim_pitch * 0.25 * (1.0 - _prone) + _prone * PI * 0.42, 0.0, 0.0)
+	var roll_lean := clampf(-local_v.x * 0.018, -0.08, 0.08) * (1.0 - _prone)
+	torso.rotation = Vector3(-lerpf(sprint_lean + 0.05 * amt, 0.0, _prone) + _crouch * 0.15 - aim_pitch * 0.35 * (1.0 - _prone), 0.0, roll_lean)
+	chest.rotation = Vector3(aim_pitch * lerpf(0.50, 0.0, _prone) + _fire_kick * 0.08 + (PI * 0.5 * _prone), 0.0, roll_lean * 0.5)
+	head_node.rotation = Vector3(aim_pitch * 0.20 * (1.0 - _prone) + _prone * PI * 0.42, 0.0, 0.0)
 
 	# Legs
 	for i in 2:
@@ -315,9 +380,9 @@ func _process(delta: float) -> void:
 	# Arms hold the weapon: right on the grip, left on the handguard.
 	var sprint_arm := 1.0 if soldier.sprinting else 0.0
 	var melee_swing := sin(_melee_t * PI) * 1.2
-	var right_up := Vector3(1.05 - sprint_arm * 0.5, -0.25, 0.25)
-	var right_el := Vector3(0.95, 0.0, 0.0)
-	var left_up := Vector3(1.35 - sprint_arm * 0.4 + melee_swing * 0.5, 0.45, -0.1)
+	var right_up := Vector3(1.0 - sprint_arm * 0.5, 0.0, -0.3)
+	var right_el := Vector3(1.0, 0.0, 0.0)
+	var left_up := Vector3(1.3 - sprint_arm * 0.4 + melee_swing * 0.5, 0.0, 0.55)
 	var left_el := Vector3(0.35, 0.0, 0.0)
 	if shoulders.size() == 2:
 		shoulders[1].rotation = right_up
@@ -371,7 +436,7 @@ func _build_ragdoll(impulse: Vector3) -> void:
 		rb.add_child(cs)
 		# Move this joint's meshes onto the body, keeping world placement.
 		for c in j.get_children():
-			if c is MeshInstance3D:
+			if c is MeshInstance3D or c.has_meta("part"):
 				var gt: Transform3D = c.global_transform
 				j.remove_child(c)
 				rb.add_child(c)

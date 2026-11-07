@@ -27,6 +27,12 @@ var _sway_target := Vector2.ZERO
 var _bob_t := 0.0
 var _kick := 0.0
 var _kick_rot := Vector3.ZERO
+var _spring_pos := Vector3.ZERO
+var _spring_pos_vel := Vector3.ZERO
+var _spring_rot := Vector3.ZERO
+var _spring_rot_vel := Vector3.ZERO
+var _left_hand_rest := Vector3.ZERO
+var _bolt_rack_triggered := false
 var _reload_t := -1.0
 var _reload_total := 1.0
 var _reload_empty := false
@@ -38,6 +44,7 @@ var _throw_anim := 0.0
 var _sprint_blend := 0.0
 var _breath_t := 0.0
 var hold_breath := false
+var _stock_parts: Array[Node3D] = []
 
 
 func _ready() -> void:
@@ -87,9 +94,19 @@ func _on_weapon_changed(w: WeaponState) -> void:
 		_muzzle = gun.find_child("Muzzle", true, false) as Node3D
 	_build_arms()
 	_build_flash()
+	_stock_parts.clear()
+	_find_stock(gun)
 	_set_layer(self)
 	_swap_anim = 1.0
 	_reload_t = -1.0
+
+
+func _find_stock(n: Node) -> void:
+	var nm := n.name.to_lower()
+	if n is Node3D and (nm.begins_with("stock") or nm.begins_with("buttpad") or nm.begins_with("buffertube") or nm.begins_with("cheek") or nm.begins_with("foldstock") or nm.begins_with("wirestock")):
+		_stock_parts.append(n)
+	for c in n.get_children():
+		_find_stock(c)
 
 
 func _build_arms() -> void:
@@ -97,9 +114,7 @@ func _build_arms() -> void:
 	arms.name = "Arms"
 	gun.add_child(arms)
 	var f: Dictionary = SoldierModel.FACTIONS[clampi(soldier.team, 0, 1)]
-	var sleeve := StandardMaterial3D.new()
-	sleeve.albedo_color = f["fatigue"]
-	sleeve.roughness = 0.9
+	var sleeve := CamoLibrary.fabric_material(f["fatigue"], f["fatigue2"], f["camo"])
 	var glove := StandardMaterial3D.new()
 	glove.albedo_color = f["gloves"]
 	glove.roughness = 0.7
@@ -110,6 +125,7 @@ func _build_arms() -> void:
 	var lh := gun.find_child("LeftHand", true, false) as Node3D
 	var lpos := lh.position if lh else Vector3(0, 0.03, -0.25)
 	_left_hand = _arm_piece(arms, Vector3(0.042, 0.05, 0.09), lpos + Vector3(-0.012, -0.03, 0), glove)
+	_left_hand_rest = _left_hand.position
 	_arm_capsule(arms, 0.03, 0.34, lpos + Vector3(-0.09, -0.1, 0.15), Vector3(-1.05, -0.55, 0.3), sleeve).name = "LeftForearm"
 
 
@@ -194,6 +210,13 @@ func _on_shot(w: WeaponState) -> void:
 	var scale := clampf(w.data.recoil_vertical, 0.3, 2.5)
 	_kick = minf(_kick + 0.6 + scale * 0.3, 1.6)
 	_kick_rot += Vector3(deg_to_rad(1.6 * scale * r), deg_to_rad(randf_range(-0.8, 0.8) * r), deg_to_rad(randf_range(-2.0, 2.0)))
+	# 2nd-order physical spring impulse:
+	_spring_pos_vel.z += 0.85 * scale * r
+	_spring_pos_vel.y += randf_range(0.02, 0.08) * scale * r
+	_spring_pos_vel.x += randf_range(-0.06, 0.06) * scale * r
+	_spring_rot_vel.x += deg_to_rad(45.0 * scale * r)
+	_spring_rot_vel.y += deg_to_rad(randf_range(-14.0, 14.0) * r)
+	_spring_rot_vel.z += deg_to_rad(randf_range(-25.0, 25.0) * r)
 	if not w.has("suppressor") or w.alt_mode:
 		_flash_t = 0.05
 		if _flash:
@@ -215,6 +238,7 @@ func _on_reload_started(total: float, empty: bool) -> void:
 	_reload_total = maxf(total, 0.2)
 	_reload_empty = empty
 	_reload_t = 0.0
+	_bolt_rack_triggered = false
 	Sfx.play_2d("reload_out", -6.0)
 
 
@@ -306,6 +330,21 @@ func _process(delta: float) -> void:
 	pos.z += _kick * 0.045 * lerpf(1.0, 0.6, ads)
 	pos.y += _kick * 0.006
 	rot += _kick_rot
+	# Recoil & movement physical spring dampers
+	var k_pos := 195.0
+	var d_pos := 19.0
+	var accel_pos := -k_pos * _spring_pos - d_pos * _spring_pos_vel
+	_spring_pos_vel += accel_pos * delta
+	_spring_pos += _spring_pos_vel * delta
+
+	var k_rot := 215.0
+	var d_rot := 21.0
+	var accel_rot := -k_rot * _spring_rot - d_rot * _spring_rot_vel
+	_spring_rot_vel += accel_rot * delta
+	_spring_rot += _spring_rot_vel * delta
+
+	pos += _spring_pos * lerpf(1.0, 0.45, ads)
+	rot += _spring_rot * lerpf(1.0, 0.45, ads)
 	# Swap (raise from below)
 	pos.y -= _swap_anim * _swap_anim * 0.25
 	rot.x -= _swap_anim * 0.8
@@ -320,33 +359,67 @@ func _process(delta: float) -> void:
 	if soldier.lethal_cook >= 0.0:
 		pos += Vector3(0.05, -0.18, 0.06)
 		rot.x -= 0.6
-	# Reload: tilt the gun and pull the magazine.
+	# Reload: multi-stage empty/tactical sequencing with hand tracking
 	if _reload_t >= 0.0 and w and w.reloading:
 		var f := clampf(_reload_t / _reload_total, 0.0, 1.0)
-		var tilt := sin(clampf(f * 1.15, 0.0, 1.0) * PI)
 		if w.shell_reload and not w.alt_mode:
 			var sh := sin(clampf(_reload_t / _reload_total, 0.0, 1.0) * PI)
 			rot += Vector3(0.25, -0.2, 0.55)
 			pos += Vector3(-0.02, -0.03, 0.0)
 			if _left_hand:
-				_left_hand.position.y = -0.06 - sh * 0.06
-		else:
-			rot += Vector3(0.3, -0.25, 0.6) * tilt
-			pos += Vector3(-0.03, -0.04, 0.02) * tilt
+				_left_hand.position = _left_hand_rest + Vector3(0, -0.06 - sh * 0.06, 0)
+		elif _reload_empty:
+			# 3-Stage Empty Reload: Drop -> Slap in -> Bolt rack
+			var tilt := sin(clampf(f * 1.05, 0.0, 1.0) * PI)
+			rot += Vector3(0.32, -0.28, 0.65) * tilt
+			pos += Vector3(-0.035, -0.045, 0.025) * tilt
+			var out := 0.0
+			if f < 0.32:
+				out = f / 0.32
+			elif f < 0.60:
+				out = 1.0 - (f - 0.32) / 0.28
+				if f > 0.58 and not _bolt_rack_triggered:
+					_spring_pos_vel.y += 0.18 # Palm slap impulse on mag seating
+			else:
+				out = 0.0
+				# Stage 3: Bolt rack / charging handle pull
+				var rack_f := (f - 0.60) / 0.40
+				var rack_curve := sin(clampf(rack_f * 1.2, 0.0, 1.0) * PI)
+				rot += Vector3(0.12, 0.28, -0.42) * rack_curve
+				pos += Vector3(0.015, -0.02, -0.01) * rack_curve
+				if rack_f >= 0.45 and not _bolt_rack_triggered:
+					_bolt_rack_triggered = true
+					_spring_pos_vel.z += 0.14
+					_spring_rot_vel.z -= deg_to_rad(22.0)
+					Sfx.play_2d("reload_in", -4.0, 1.22)
 			if _mag:
-				var out := 0.0
-				if f < 0.35:
-					out = f / 0.35
-				elif f < 0.55:
-					out = 1.0
-				elif f < 0.8:
-					out = 1.0 - (f - 0.55) / 0.25
+				_mag.position = _mag_rest + Vector3(0, -0.26, 0.06) * out
+				_mag.visible = not (f > 0.30 and f < 0.42)
+			if _left_hand and _mag:
+				_left_hand.position = _left_hand_rest.lerp(_mag.position + Vector3(0, -0.04, 0.02), clampf(out * 1.1, 0.0, 1.0))
+		else:
+			# Tactical Reload (fast swap)
+			var tilt := sin(clampf(f * 1.15, 0.0, 1.0) * PI)
+			rot += Vector3(0.28, -0.22, 0.55) * tilt
+			pos += Vector3(-0.03, -0.04, 0.02) * tilt
+			var out := 0.0
+			if f < 0.35:
+				out = f / 0.35
+			elif f < 0.55:
+				out = 1.0
+			elif f < 0.8:
+				out = 1.0 - (f - 0.55) / 0.25
+			if _mag:
 				_mag.position = _mag_rest + Vector3(0, -0.25, 0.05) * out
 				_mag.visible = not (f > 0.33 and f < 0.5)
+			if _left_hand and _mag:
+				_left_hand.position = _left_hand_rest.lerp(_mag.position + Vector3(0, -0.03, 0), clampf(out * 1.1, 0.0, 1.0))
 	else:
 		if _mag:
 			_mag.position = _mag_rest
 			_mag.visible = true
+		if _left_hand:
+			_left_hand.position = _left_hand_rest
 	if _chamber_t >= 0.0:
 		var c := sin(clampf(_chamber_t / 0.9, 0.0, 1.0) * PI)
 		rot += Vector3(0.1, -0.15, 0.3) * c
@@ -354,6 +427,8 @@ func _process(delta: float) -> void:
 	# Hide the gun when fully scoped with a sniper scope (HUD overlay takes over).
 	var scoped := w != null and w.is_scoped() and ads > 0.92
 	gun.visible = not scoped
+	for p in _stock_parts:
+		p.visible = ads < 0.6
 	gun.position = pos
 	gun.rotation = rot
 

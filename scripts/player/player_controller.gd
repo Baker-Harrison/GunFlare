@@ -82,6 +82,12 @@ func setup(s: Soldier, world_env: Environment) -> void:
 	hud.player = self
 	add_child(hud)
 	soldier.shot_fired.connect(func(_w: WeaponState) -> void: _fov_kick = 0.6)
+	# Flinch: taking hits knocks your aim.
+	soldier.damaged.connect(func(info: DamageInfo) -> void:
+		add_shake(0.25 + minf(info.amount / 100.0, 1.0) * 0.4)
+		var f := deg_to_rad(randf_range(0.6, 1.8)) * (0.5 if soldier.has_perk("steady_hand") else 1.0)
+		soldier.pitch += f
+		soldier.yaw += f * randf_range(-0.8, 0.8))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -204,6 +210,22 @@ func on_player_died(killer: Node3D) -> void:
 
 func _update_death_cam(delta: float) -> void:
 	_death_time += delta
+	# After a beat, cut to the killer's eyes looking at where we fell.
+	var k := _death_cam_target as Soldier
+	if _death_time > 1.2 and k and is_instance_valid(k) and k != soldier and k.alive:
+		var eye := k.aim_origin()
+		var target := soldier.global_position + Vector3.UP * 0.4
+		if eye.distance_to(target) > 0.5:
+			var want := Transform3D(Basis.looking_at(target - eye, Vector3.UP), eye)
+			if _death_time < 1.3:
+				camera.global_transform = want
+			else:
+				camera.global_transform = camera.global_transform.interpolate_with(want, minf(delta * 6.0, 1.0))
+			var w := k.weapon()
+			camera.fov = lerpf(camera.fov, 45.0 if w and w.is_scoped() else 60.0, delta * 2.0)
+			hud.set_killcam(k)
+			return
+	hud.set_killcam(null)
 	# Pull up and back from the body and look at the killer.
 	var body_pos := soldier.global_position + Vector3.UP * 0.5
 	var cam_pos := body_pos + Vector3.UP * minf(1.0 + _death_time * 1.5, 3.5) - soldier.global_basis.z * -1.5

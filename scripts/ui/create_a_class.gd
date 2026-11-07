@@ -10,6 +10,7 @@ var _body: HBoxContainer
 var _list: VBoxContainer
 var _editor: VBoxContainer
 var _picker: VBoxContainer
+var _showcase: WeaponShowcase
 
 
 func _ready() -> void:
@@ -57,6 +58,10 @@ func _refresh() -> void:
 func _build_editor() -> void:
 	UiKit.clear(_editor)
 	var c := _cls()
+	_showcase = WeaponShowcase.new()
+	_showcase.custom_minimum_size = Vector2(560, 230)
+	_editor.add_child(_showcase)
+	_showcase.show_weapon(c["primary"], c.get("primary_attachments", []), c.get("primary_camo", ""))
 	var name_edit := LineEdit.new()
 	name_edit.text = c.get("name", "Custom Class")
 	name_edit.max_length = 20

@@ -119,6 +119,13 @@ func set_death_info(t: String) -> void:
 	_death_info = t
 
 
+var _killcam: Soldier
+
+
+func set_killcam(k: Soldier) -> void:
+	_killcam = k
+
+
 func set_interact(text: String, progress := -1.0) -> void:
 	_interact_text = text
 	_interact_progress = progress
@@ -175,6 +182,8 @@ func _draw_hud() -> void:
 		if s.downed:
 			_text(Vector2(0, vp.y * 0.7), "DOWNED  %.0f" % s.downed_timer, 30, RED, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
 	else:
+		if _killcam and is_instance_valid(_killcam):
+			_draw_killcam(vp, _killcam)
 		_text(Vector2(0, vp.y * 0.72), _death_info, 26, WHITE, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
 		_text(Vector2(0, vp.y * 0.72 + 36), _respawn_text, 20, DIM, HORIZONTAL_ALIGNMENT_CENTER, vp.x)
 	_draw_score(vp, m)
@@ -190,6 +199,22 @@ func _draw_hud() -> void:
 		_draw_scoreboard(vp, m)
 	if Settings.get_value("show_fps"):
 		_text(Vector2(vp.x - 90, 20), "%d FPS" % Engine.get_frames_per_second(), 14, DIM)
+
+
+func _draw_killcam(vp: Vector2, k: Soldier) -> void:
+	# Letterbox bars and killer card.
+	canvas.draw_rect(Rect2(0, 0, vp.x, 70), Color(0, 0, 0, 0.85))
+	canvas.draw_rect(Rect2(0, vp.y - 70, vp.x, 70), Color(0, 0, 0, 0.85))
+	_text(Vector2(40, 48), "KILLCAM", 30, Color(1, 0.35, 0.3), HORIZONTAL_ALIGNMENT_LEFT, -1, true)
+	var w := k.weapon()
+	var rank := int(k.get_meta("bot_rank", Progression.rank))
+	var info := "%s   ·   Rank %d   ·   %s" % [k.display_name.to_upper(), rank, w.data.display_name if w else ""]
+	if w and not w.attachments.is_empty():
+		info += "  +  " + ", ".join(w.attachments.map(func(a: String) -> String: return ContentDB.get_item(a).display_name))
+	_text(Vector2(240, 46), info, 20, WHITE)
+	_text(Vector2(vp.x - 360, 46), "HEALTH %d" % int(k.health), 20, Color(1, 1, 1, 0.8), HORIZONTAL_ALIGNMENT_RIGHT, 320, true)
+	var perks := ", ".join(k.perks.map(func(p: String) -> String: return ContentDB.get_item(p).display_name if ContentDB.get_item(p) else p))
+	_text(Vector2(40, vp.y - 26), perks, 16, Color(1, 1, 1, 0.6))
 
 
 func _draw_crosshair(c: Vector2, s: Soldier) -> void:
@@ -293,6 +318,14 @@ func _draw_ammo(vp: Vector2, s: Soldier) -> void:
 	var base := vp.y - 40.0
 	var low := w.current_ammo() <= int(w.current_mag_size() * 0.25)
 	var ammo_col := RED if low else WHITE
+	# Tactical weapon HUD plate
+	var plate_rect := Rect2(right - 280, base - 114, 290, 146)
+	canvas.draw_rect(plate_rect, Color(0.04, 0.05, 0.06, 0.45))
+	canvas.draw_line(Vector2(plate_rect.position.x, plate_rect.position.y), Vector2(plate_rect.position.x + 14, plate_rect.position.y), Color(1, 1, 1, 0.5), 1.5)
+	canvas.draw_line(Vector2(plate_rect.position.x, plate_rect.position.y), Vector2(plate_rect.position.x, plate_rect.position.y + 14), Color(1, 1, 1, 0.5), 1.5)
+	canvas.draw_line(Vector2(plate_rect.end.x, plate_rect.end.y), Vector2(plate_rect.end.x - 14, plate_rect.end.y), Color(1, 1, 1, 0.5), 1.5)
+	canvas.draw_line(Vector2(plate_rect.end.x, plate_rect.end.y), Vector2(plate_rect.end.x, plate_rect.end.y - 14), Color(1, 1, 1, 0.5), 1.5)
+
 	_text(Vector2(right - 300, base - 40), "%d" % w.current_ammo(), 52, ammo_col, HORIZONTAL_ALIGNMENT_RIGHT, 230, true)
 	_text(Vector2(right - 66, base - 40), "/ %d" % w.current_reserve(), 24, DIM, HORIZONTAL_ALIGNMENT_LEFT, -1, false)
 	var nm := w.data.display_name
@@ -339,6 +372,20 @@ func _draw_minimap(s: Soldier, m: Node) -> void:
 	var blackout: bool = m != null and m.has_method("is_blacked_out") and m.is_blacked_out(s)
 	canvas.draw_rect(rect, Color(0.05, 0.07, 0.06, 0.72))
 	canvas.draw_rect(rect, Color(1, 1, 1, 0.25), false, 1.5)
+	# Tactical corner brackets
+	var b_len := 12.0
+	var b_col := Color(1.0, 1.0, 1.0, 0.7)
+	canvas.draw_line(origin, origin + Vector2(b_len, 0), b_col, 2.0)
+	canvas.draw_line(origin, origin + Vector2(0, b_len), b_col, 2.0)
+	var tr := origin + Vector2(size, 0)
+	canvas.draw_line(tr, tr + Vector2(-b_len, 0), b_col, 2.0)
+	canvas.draw_line(tr, tr + Vector2(0, b_len), b_col, 2.0)
+	var bl := origin + Vector2(0, size)
+	canvas.draw_line(bl, bl + Vector2(b_len, 0), b_col, 2.0)
+	canvas.draw_line(bl, bl + Vector2(0, -b_len), b_col, 2.0)
+	var br := origin + Vector2(size, size)
+	canvas.draw_line(br, br + Vector2(-b_len, 0), b_col, 2.0)
+	canvas.draw_line(br, br + Vector2(0, -b_len), b_col, 2.0)
 	if blackout:
 		_text(origin + Vector2(0, size * 0.5), "NO SIGNAL", 18, RED, HORIZONTAL_ALIGNMENT_CENTER, size, true)
 		return
@@ -399,7 +446,14 @@ func _draw_minimap(s: Soldier, m: Node) -> void:
 			if uav >= 2:
 				var f := Vector2(0, -1).rotated(-(o.yaw - yaw))
 				canvas.draw_line(p, p + f * 9.0, Color(1, 0.2, 0.15, alpha), 2.0)
-	# Me
+	# Player FOV cone & player marker
+	var fov_len := 38.0
+	var fov_ang := 0.44
+	var left_pt := center + Vector2(sin(-fov_ang), -cos(-fov_ang)) * fov_len
+	var right_pt := center + Vector2(sin(fov_ang), -cos(fov_ang)) * fov_len
+	canvas.draw_colored_polygon(PackedVector2Array([center, left_pt, right_pt]), Color(1.0, 0.9, 0.35, 0.12))
+	canvas.draw_line(center, left_pt, Color(1.0, 0.9, 0.35, 0.25), 1.0)
+	canvas.draw_line(center, right_pt, Color(1.0, 0.9, 0.35, 0.25), 1.0)
 	var tri := PackedVector2Array([center + Vector2(0, -8), center + Vector2(-5.5, 6), center + Vector2(5.5, 6)])
 	canvas.draw_colored_polygon(tri, YELLOW)
 	if uav > 0:

@@ -32,7 +32,8 @@ func update(delta: float) -> void:
 			tags.erase(t)
 			continue
 		for s: Soldier in match_ref.soldiers:
-			if not s.alive or s.global_position.distance_to(t["pos"]) > 1.4:
+			var flat := Vector2(s.global_position.x - t["pos"].x, s.global_position.z - t["pos"].z).length()
+			if not s.alive or flat > 1.6 or absf(s.global_position.y - t["pos"].y) > 2.0:
 				continue
 			if s.team != t["team"]:
 				add_team_score(s.team, 1)
