@@ -657,13 +657,13 @@ LEFT_REF = Vector((0.0, 0.25, 0.04))  # typical LeftHand marker (bottom of the h
 FAST = os.environ.get("GUNFARE_ARMS_FAST") == "1"
 GLOVE_H = 0.0006 if FAST else 0.00045  # detail mesh (normal map source)
 SLEEVE_H = 0.0011
-GLOVE_LOW_H = 0.00125  # game mesh, before decimation
+GLOVE_LOW_H = 0.0018  # game mesh: regular quads, no decimation
 SLEEVE_LOW_H = 0.0016
 GLOVE_TRIS = 32000
 SLEEVE_TRIS = 8000
 GLOVE_COLOURS = {
     "sentinel": {"palm": (0.33, 0.27, 0.19), "back": (0.47, 0.41, 0.31), "pad": (0.25, 0.22, 0.17), "cuff": (0.36, 0.32, 0.24)},
-    "militia": {"palm": (0.11, 0.11, 0.115), "back": (0.16, 0.16, 0.17), "pad": (0.075, 0.075, 0.08), "cuff": (0.13, 0.13, 0.14)},
+    "militia": {"palm": (0.2, 0.2, 0.21), "back": (0.27, 0.27, 0.28), "pad": (0.15, 0.15, 0.16), "cuff": (0.23, 0.23, 0.24)},
 }
 
 
@@ -731,7 +731,7 @@ def _glove_mats(fname, m):
 def build_arms(fname):
     import hand_anatomy as ha
     m = faction_mats(FACTIONS[fname])
-    m["uniform"]["camo_scale"] = 1.7  # finer pattern at first-person scale
+    m["uniform"]["camo_scale"] = 2.4  # finer pattern at first-person scale
     glove_mats = _glove_mats(fname, m)
     lows = []
     high = {}
@@ -741,13 +741,13 @@ def build_arms(fname):
         # a coarse step (even triangles and clean UV islands), then reduced.
         lo, hi = arm.glove_bounds()
         hi_g = _glove_obj(arm, name + "_HiGlove", lo, hi, GLOVE_H, glove_mats, 6, 4)
-        lo_g = _decimated(_glove_obj(arm, name + "_GloveSrc", lo, hi, GLOVE_LOW_H, glove_mats, 8, 2), name + "_Glove", GLOVE_TRIS)
+        lo_g = _glove_obj(arm, name + "_Glove", lo, hi, GLOVE_LOW_H, glove_mats, 8, 2)
         lo, hi = arm.sleeve_bounds()
         v, q = ha.build_mesh(arm.sleeve_sdf, lo, hi, SLEEVE_H)
         hi_s = _mesh_obj(name + "_HiSleeve", v, q, [m["uniform"]])
         v, q = ha.build_mesh(arm.sleeve_sdf, lo, hi, SLEEVE_LOW_H, smooth_iter=8)
         lo_s = _decimated(_mesh_obj(name + "_SleeveSrc", v, q, [m["uniform"]]), name + "_Sleeve", SLEEVE_TRIS)
-        for src in (name + "_GloveSrc", name + "_SleeveSrc"):
+        for src in (name + "_SleeveSrc",):
             bpy.data.objects.remove(bpy.data.objects[src], do_unlink=True)
         low = texlib.join([lo_g, lo_s], name)
         low.vertex_groups.clear()

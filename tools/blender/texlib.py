@@ -563,8 +563,8 @@ def _bake_from_high(objs, high, samples):
     sc.cycles.samples = samples
     bk = sc.render.bake
     bk.use_selected_to_active = True
-    bk.cage_extrusion = 0.0015
-    bk.max_ray_distance = 0.004
+    bk.cage_extrusion = 0.003
+    bk.max_ray_distance = 0.007
     first = True
     for o in objs:
         src = high.get(o.name) or []

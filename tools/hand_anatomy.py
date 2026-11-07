@@ -374,7 +374,7 @@ class Arm:
                 rts = [0.0112, 0.0104, 0.0097, 0.0088]
             else:
                 fr = [f for f in FINGERS if f[0] == name][0][4]
-                rw = min(fr * 1.02, FINGER_SPACING * 0.5 - 0.0015)
+                rw = min(fr * 1.02, FINGER_SPACING * 0.5 - 0.0021)
                 rt = fr * 0.9
                 rws = [rw * t for t in (1.0, 0.92, 0.84, 0.72)]
                 rts = [rt * t for t in (1.0, 0.91, 0.82, 0.66)]
@@ -442,7 +442,7 @@ class Arm:
             for p in parts:
                 d = p.dist(P)
                 f = d if f is None else smin(f, d, 0.0035)
-            joined = smin(palm, f, 0.0065 if name != "Thumb" else 0.009)
+            joined = smin(palm, f, 0.0042 if name != "Thumb" else 0.007)
             hand = joined if hand is None else np.minimum(hand, joined)
         for p in self.pads:
             hand = smin(hand, p.dist(P), 0.0018)
@@ -489,7 +489,7 @@ class Arm:
         outer = _tube(rad - r, np.abs(h - L * 0.5) - L * 0.5)
         # Opening at the wrist end, 22 mm deep, so the glove cuff goes into
         # the sleeve. The walls stay thick enough for a clean mesh.
-        hole = _tube(rad - (r - 0.0055), np.abs(h + 0.039) - 0.061)
+        hole = _tube(rad - (r - 0.0055), np.abs(h + 0.044) - 0.056)
         return np.maximum(outer, -hole)
 
     def glove_bounds(self, pad=0.006):
