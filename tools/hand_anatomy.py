@@ -23,10 +23,10 @@ import math
 import numpy as np
 
 FINGERS = [  # name, proximal, middle, distal lengths, radius
-    ("Index", 0.044, 0.026, 0.022, 0.0098),
-    ("Middle", 0.048, 0.03, 0.023, 0.0102),
-    ("Ring", 0.045, 0.028, 0.022, 0.0098),
-    ("Pinky", 0.036, 0.021, 0.019, 0.0086),
+    ("Index", 0.044, 0.026, 0.022, 0.0086),
+    ("Middle", 0.048, 0.03, 0.023, 0.009),
+    ("Ring", 0.045, 0.028, 0.022, 0.0086),
+    ("Pinky", 0.036, 0.021, 0.019, 0.0076),
 ]
 CHAIN_NAMES = ("Thumb", "Index", "Middle", "Ring", "Pinky")
 FINGER_SPACING = 0.0205
@@ -64,7 +64,7 @@ def hand_spec(prefix):
         hc = left + np.array([0.0, 0.0, 0.024])
         return dict(centre=hc + np.array([0.0, -0.02, 0.0]), axis=(0, 1, 0), side=(-0.45, 0.0, -1.0), radius=0.026,
                     handed=-1, arc=1.2, index_straight=None, thumb=("straight", 1.0),
-                    starts=[0.6, 0.62, 0.66, 0.71], curls=[0.58, 0.66, 0.7, 0.76], elbow=(-0.2, -0.22, -0.11),
+                    starts=[0.6, 0.62, 0.66, 0.71], curls=[0.58, 0.66, 0.7, 0.76], elbow=(-0.27, -0.19, -0.07),
                     offset=left)
     pc = top + gax * 0.05 + np.array([-0.012, 0.01, 0.0])
     return dict(centre=pc, axis=-gax, side=(-1.0, 0.6, 0.0), radius=0.04, handed=-1, arc=1.0,
@@ -137,7 +137,8 @@ def hand_chains(s):
         # Thumb along the frame, pointing at the muzzle (pistol support hand).
         th = -arc * 0.5 - 0.35
         fwd = _n(amount)
-        p1 = cy.at(th, rad, top + 0.012)
+        t_base = cy.at(-arc * 0.5 + 0.25, pr + 0.004, top - 0.026)
+        p1 = cy.at(th, rad, top - 0.01)
         p2 = p1 + fwd * 0.03
         p3 = p2 + _n(fwd + np.asarray([0.0, 0.0, -0.15])) * 0.024
         pts = [t_base, p1, p2, p3]
@@ -232,14 +233,14 @@ class Seg:
             d = d + 0.00055 * g * palm_side
             # Stretch lines across the back of the joint.
             back = np.clip((-v / rt - 0.3) / 0.4, 0.0, 1.0)
-            d = d + 0.00022 * back * np.exp(-(h / 0.004) ** 2) * (0.5 + 0.5 * np.cos(h * 2400.0))
+            d = d + 0.0004 * back * np.exp(-(h / 0.0045) ** 2) * (0.5 + 0.5 * np.cos(h * 2100.0))
         return d
 
     def zone_of(self, P):
         if self.zone != ZONE_LEATHER:
             return np.full(len(P), self.zone)
         t, u, v, e, rw, rt = self.local(P)
-        zone = np.where(v / rt > -0.05, ZONE_LEATHER, ZONE_FABRIC)
+        zone = np.where(v / rt > 0.3, ZONE_LEATHER, ZONE_FABRIC)
         if self.tip:
             zone = np.where(t > 0.5, ZONE_LEATHER, zone)
         return zone

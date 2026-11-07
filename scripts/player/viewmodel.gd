@@ -26,7 +26,7 @@ const FOV_ADS := 46.0
 const PIVOT := Vector3(0.0, 0.0, 0.14)
 ## Shoulder positions in camera space for the arm IK.
 const SHOULDER_R := Vector3(0.21, -0.3, 0.16)
-const SHOULDER_L := Vector3(-0.27, -0.28, 0.08)
+const SHOULDER_L := Vector3(-0.34, -0.25, 0.05)
 ## Rear charging handles (pulled straight back from the top of the receiver).
 const AR_FAMILY := ["m4a1", "m16a4", "hk416"]
 
