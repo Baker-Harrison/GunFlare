@@ -269,6 +269,8 @@ func _show_update_banner() -> void:
 
 func _update_banner():
 	var lines: PackedStringArray = []
+	if UpdateService.install_notice != "":
+		lines.append(UpdateService.install_notice)
 	if UpdateService.install_error != "":
 		lines.append("The last update failed. " + UpdateService.install_error)
 	if UpdateService.status == "available":

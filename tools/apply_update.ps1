@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ZipPath,
     [Parameter(Mandatory = $true)][string]$InstallDir,
     [Parameter(Mandatory = $true)][string]$ExeName,
-    [Parameter(Mandatory = $true)][string]$LogPath
+    [Parameter(Mandatory = $true)][string]$LogPath,
+    [string]$Moved = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,8 +41,28 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $source $ExeName))) {
         throw "The package does not contain $ExeName."
     }
-    Copy-Item -Path (Join-Path $source "*") -Destination $InstallDir -Recurse -Force
-    Write-UpdateLog "OK"
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    # A virus scanner or Explorer can hold a file for a short time after the game stops.
+    $attempt = 0
+    while ($true) {
+        try {
+            Copy-Item -Path (Join-Path $source "*") -Destination $InstallDir -Recurse -Force
+            break
+        }
+        catch {
+            $attempt += 1
+            if ($attempt -ge 30) {
+                throw
+            }
+            Start-Sleep -Seconds 1
+        }
+    }
+    if ($Moved -eq "1") {
+        Write-UpdateLog ("OK MOVED " + $InstallDir)
+    }
+    else {
+        Write-UpdateLog "OK"
+    }
     Start-Process -FilePath (Join-Path $InstallDir $ExeName) -WorkingDirectory $InstallDir
 }
 catch {

@@ -54,6 +54,13 @@ func _test_update_version() -> void:
 	check(UpdateService.is_newer("v1.0.0", "0.9.9"), "a v prefix is accepted")
 	check(not UpdateService.is_newer("1.2.0", "1.2"), "1.2.0 matches 1.2")
 	check(UpdateService.is_newer("1.2.1", "1.2"), "1.2.1 is newer than 1.2")
+	var win_temp := PackedStringArray(["C:\\Users\\p\\AppData\\Local\\Temp"])
+	check(UpdateService.is_temporary_dir("C:\\Users\\p\\AppData\\Local\\Temp\\01b0_GunFare-windows.zip.GunFare-windows.zip", "Windows", win_temp), "a copy that runs from a zip installs elsewhere")
+	check(UpdateService.is_temporary_dir("D:/Games/GunFare-windows.zip", "Windows", PackedStringArray()), "a .zip folder is temporary")
+	check(not UpdateService.is_temporary_dir("D:\\Games\\GunFare", "Windows", win_temp), "a normal folder keeps the update")
+	check(UpdateService.is_temporary_dir("/private/var/folders/x/T/AppTranslocation/ABC/d", "macOS", PackedStringArray()), "a translocated app installs elsewhere")
+	check(not UpdateService.is_temporary_dir("/Users/p/Applications", "macOS", PackedStringArray(["/var/folders/x/T/"])), "the Applications folder keeps the update")
+	check(not UpdateService.is_temporary_dir("/home/p/games/GunFare", "Linux", PackedStringArray(["/tmp"])), "a Linux game folder keeps the update")
 
 
 func _test_rank_table() -> void:
