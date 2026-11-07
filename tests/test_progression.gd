@@ -58,7 +58,7 @@ func _test_rank_table() -> void:
 
 
 func _test_kill_xp() -> void:
-	kill("kestrel_ar", true)
+	kill("m4a1", true)
 	check(Progression.xp == 150, "headshot kill = 150 xp (got %d)" % Progression.xp)
 	check(Progression.stats["kills"] == 1 and Progression.stats["headshots"] == 1, "kill stats")
 
@@ -75,41 +75,41 @@ func _test_rank_up_unlocks() -> void:
 
 func _test_attachment_unlock() -> void:
 	for i in 9:
-		kill("kestrel_ar")
-	check(not Progression.is_attachment_unlocked("kestrel_ar", "reflex"), "reflex locked at 9 kills")
-	kill("kestrel_ar")
-	check(Progression.is_attachment_unlocked("kestrel_ar", "reflex"), "reflex unlocked at 10 kills")
+		kill("m4a1")
+	check(not Progression.is_attachment_unlocked("m4a1", "reflex"), "reflex locked at 9 kills")
+	kill("m4a1")
+	check(Progression.is_attachment_unlocked("m4a1", "reflex"), "reflex unlocked at 10 kills")
 	check(Progression.xp == 1000 + 300, "10 kills + tier xp (got %d)" % Progression.xp)
-	check(not Progression.is_attachment_unlocked("wasp", "reflex"), "unlock is per weapon")
+	check(not Progression.is_attachment_unlocked("mp5", "reflex"), "unlock is per weapon")
 
 
 func _test_camo_unlock() -> void:
 	for i in 10:
-		kill("kestrel_ar", true)
-	check(Progression.is_camo_unlocked("kestrel_ar", "camo_woodland"), "camo at 10 headshots")
+		kill("m4a1", true)
+	check(Progression.is_camo_unlocked("m4a1", "camo_woodland"), "camo at 10 headshots")
 
 
 func _test_elite_perk() -> void:
 	for i in 119:
-		kill("wasp", false, ["quickhands", "heavy_rounds", "steady_hand"])
+		kill("mp5", false, ["quickhands", "heavy_rounds", "steady_hand"])
 	check(not Progression.has_elite("quickhands"), "quickhands not elite at 119")
-	kill("wasp", false, ["quickhands"])
+	kill("mp5", false, ["quickhands"])
 	check(Progression.has_elite("quickhands"), "quickhands elite at 120")
 	for i in 20:
-		kill("wasp", false, ["packmule"], {"attachment_count": 1})
+		kill("mp5", false, ["packmule"], {"attachment_count": 1})
 	check(Progression.challenge_state("packmule_elite")["count"] == 0, "packmule needs 2 attachments")
 
 
 func _test_loadout_validation() -> void:
 	var l: Dictionary = ContentDB.DEFAULT_CUSTOM_CLASS.duplicate(true)
 	check(Progression.validate_loadout(l).is_empty(), "default class valid: %s" % [Progression.validate_loadout(l)])
-	l["primary"] = "ironwood"
+	l["primary"] = "ak47"
 	check(not Progression.validate_loadout(l).is_empty(), "rank-70 weapon locked")
-	l["primary"] = "kestrel_ar"
+	l["primary"] = "m4a1"
 	l["primary_attachments"] = ["reflex"]
 	check(not Progression.validate_loadout(l).is_empty(), "locked attachment rejected")
-	Progression.grant_reward({"type": "attachment", "weapon": "kestrel_ar", "id": "reflex"})
-	Progression.grant_reward({"type": "attachment", "weapon": "kestrel_ar", "id": "holo"})
+	Progression.grant_reward({"type": "attachment", "weapon": "m4a1", "id": "reflex"})
+	Progression.grant_reward({"type": "attachment", "weapon": "m4a1", "id": "holo"})
 	check(Progression.validate_loadout(l).is_empty(), "unlocked attachment ok")
 	l["primary_attachments"] = ["reflex", "holo"]
 	check(not Progression.validate_loadout(l).is_empty(), "two attachments need packmule")
@@ -130,31 +130,31 @@ func _test_streak_selection() -> void:
 func _test_prestige() -> void:
 	Progression.grant_reward({"type": "title", "id": "Test Title"})
 	for i in 10:
-		kill("kestrel_ar")
+		kill("m4a1")
 	check(not Progression.can_prestige(), "can't ascend early")
 	check(not Progression.prestige_up(), "ascend refused early")
 	Progression.award_xp(ContentDB.max_xp, "test")
 	check(Progression.rank == 70 and Progression.can_prestige(), "can ascend at max")
 	check(Progression.prestige_up(), "ascend")
 	check(Progression.prestige == 1 and Progression.rank == 1 and Progression.xp == 0, "rank reset")
-	check(not Progression.is_attachment_unlocked("kestrel_ar", "reflex"), "attachments reset")
+	check(not Progression.is_attachment_unlocked("m4a1", "reflex"), "attachments reset")
 	check(Progression.titles.has("Test Title"), "titles kept")
 	check(Progression.challenge_state("lifetime_kills")["count"] == 10, "lifetime progress kept")
-	check(Progression.challenge_state("kestrel_ar_marksman")["count"] == 0, "weapon challenge reset")
+	check(Progression.challenge_state("m4a1_marksman")["count"] == 0, "weapon challenge reset")
 	check(Progression.classes.size() == 6, "extra class slot after ascension")
 
 
 func _test_save_load() -> void:
 	for i in 25:
-		kill("kestrel_ar", true)
+		kill("m4a1", true)
 	Progression.grant_reward({"type": "emblem", "id": "emblem_test"})
 	var xp_before := Progression.xp
 	check(Progression.save_profile(), "save ok")
 	Progression.reset_profile()
 	Progression.load_profile()
 	check(Progression.xp == xp_before, "xp restored")
-	check(Progression.is_attachment_unlocked("kestrel_ar", "suppressor"), "attachments restored")
-	check(Progression.is_camo_unlocked("kestrel_ar", "camo_dune"), "camos restored")
+	check(Progression.is_attachment_unlocked("m4a1", "suppressor"), "attachments restored")
+	check(Progression.is_camo_unlocked("m4a1", "camo_dune"), "camos restored")
 	check(Progression.emblems.has("emblem_test"), "emblems restored")
-	check(Progression.challenge_state("kestrel_ar_marksman")["count"] == 25, "challenge progress restored")
-	check(typeof(Progression.challenge_state("kestrel_ar_marksman")["count"]) == TYPE_INT, "counts are ints")
+	check(Progression.challenge_state("m4a1_marksman")["count"] == 25, "challenge progress restored")
+	check(typeof(Progression.challenge_state("m4a1_marksman")["count"]) == TYPE_INT, "counts are ints")

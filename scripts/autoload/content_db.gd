@@ -54,10 +54,10 @@ const RANK_SUBLEVELS := ["I", "II", "III", "IV", "V"]
 const DEFAULT_STREAKS := ["pulse_scan", "supply_crate", "mortar_strike"]
 const DEFAULT_CUSTOM_CLASS := {
 	"name": "Custom Class",
-	"primary": "kestrel_ar",
+	"primary": "m4a1",
 	"primary_attachments": [],
 	"primary_camo": "",
-	"secondary": "pip",
+	"secondary": "m9",
 	"secondary_attachments": [],
 	"lethal": "shard_grenade",
 	"tactical": "flash_pop",
@@ -67,38 +67,38 @@ const DEFAULT_CUSTOM_CLASS := {
 
 ## Preset classes usable at any rank (not validated against unlocks).
 const PRESET_CLASSES := [
-	{"name": "Rifleman", "primary": "kestrel_ar", "primary_attachments": ["underbarrel_gl"], "primary_camo": "",
-		"secondary": "pip", "secondary_attachments": [], "lethal": "shard_grenade", "tactical": "flash_pop",
+	{"name": "Rifleman", "primary": "m4a1", "primary_attachments": ["underbarrel_gl"], "primary_camo": "",
+		"secondary": "m9", "secondary_attachments": [], "lethal": "shard_grenade", "tactical": "flash_pop",
 		"perks": ["quickhands", "heavy_rounds", "steady_hand"], "deathstreak": "second_wind"},
-	{"name": "Close Quarters", "primary": "wasp", "primary_attachments": ["suppressor"], "primary_camo": "",
-		"secondary": "thumper", "secondary_attachments": [], "lethal": "shard_grenade", "tactical": "dazer",
+	{"name": "Close Quarters", "primary": "mp5", "primary_attachments": ["suppressor"], "primary_camo": "",
+		"secondary": "m1014", "secondary_attachments": [], "lethal": "shard_grenade", "tactical": "dazer",
 		"perks": ["tireless", "fleetfoot", "hush"], "deathstreak": "second_wind"},
-	{"name": "Overwatch", "primary": "heron", "primary_attachments": ["suppressor"], "primary_camo": "",
-		"secondary": "pip", "secondary_attachments": [], "lethal": "tripwire_mine", "tactical": "smoke_canister",
+	{"name": "Overwatch", "primary": "m24", "primary_attachments": ["suppressor"], "primary_camo": "",
+		"secondary": "m9", "secondary_attachments": [], "lethal": "tripwire_mine", "tactical": "smoke_canister",
 		"perks": ["scrounger", "ghostline", "steady_hand"], "deathstreak": "second_wind"},
-	{"name": "Heavy", "primary": "anvil", "primary_attachments": ["grip"], "primary_camo": "",
-		"secondary": "thudder", "secondary_attachments": [], "lethal": "sticky_charge", "tactical": "flash_pop",
+	{"name": "Heavy", "primary": "m249", "primary_attachments": ["grip"], "primary_camo": "",
+		"secondary": "rpg7", "secondary_attachments": [], "lethal": "sticky_charge", "tactical": "flash_pop",
 		"perks": ["scrounger", "heavy_rounds", "steady_hand"], "deathstreak": "second_wind"},
-	{"name": "Recon", "primary": "mako_5", "primary_attachments": ["holo"], "primary_camo": "",
-		"secondary": "hornet", "secondary_attachments": [], "lethal": "hatchet", "tactical": "dazer",
+	{"name": "Recon", "primary": "ump45", "primary_attachments": ["holo"], "primary_camo": "",
+		"secondary": "usp45", "secondary_attachments": [], "lethal": "hatchet", "tactical": "dazer",
 		"perks": ["quickhands", "fleetfoot", "keen_eye"], "deathstreak": "second_wind"},
 ]
 
 ## id: [display name, description]
 const ATTACHMENTS := {
-	"reflex": ["Reflex Sight", "Red-dot optic for fast target pickup."],
+	"reflex": ["Red Dot Sight", "Red-dot optic for fast target pickup."],
 	"holo": ["Holo Sight", "Wide holographic optic."],
-	"marksman_scope": ["Marksman Scope", "Mid-range magnified optic."],
+	"marksman_scope": ["4x Scope", "Mid-range magnified optic."],
 	"thermal": ["Thermal Optic", "Shows targets as heat signatures."],
 	"suppressor": ["Suppressor", "Hides you from the minimap when firing."],
-	"underbarrel_gl": ["Underbarrel Launcher", "Single-shot grenade launcher."],
-	"underbarrel_shotgun": ["Underbarrel Shotgun", "Close-range backup blast."],
-	"fmj": ["Piercing Rounds", "Better penetration through cover."],
+	"underbarrel_gl": ["Grenade Launcher", "Single-shot grenade launcher."],
+	"underbarrel_shotgun": ["Masterkey Shotgun", "Close-range backup blast."],
+	"fmj": ["FMJ", "Better penetration through cover."],
 	"pulse_tracker": ["Pulse Tracker", "Shows nearby enemies on a wrist screen."],
 	"ext_mag": ["Extended Mag", "More rounds per magazine."],
-	"rapid_fire": ["Hair Trigger", "Higher fire rate."],
+	"rapid_fire": ["Rapid Fire", "Higher fire rate."],
 	"grip": ["Foregrip", "Less recoil."],
-	"akimbo": ["Dual Wield", "One in each hand."],
+	"akimbo": ["Akimbo", "One in each hand."],
 	"tactical_knife": ["Knife Grip", "Faster melee."],
 }
 const OPTICS := ["reflex", "holo", "marksman_scope", "thermal"]
@@ -130,36 +130,113 @@ const CAMO_TRACK := [
 	["camo_gilded", "Gilded", 300],
 ]
 
-## [id, name, class, slot, unlock rank, damage, rpm, magazine, range m]
+## Per-class baseline stats; each weapon below overrides what differs.
+const WEAPON_CLASS_DEFAULTS := {
+	"assault": {"slot": "primary", "fire_mode": "auto", "damage_max": 30, "damage_min": 20, "range_min": 30, "range_max": 60,
+		"fire_rate_rpm": 750, "magazine": 30, "reserve_mags": 4, "reload_time": 2.2, "reload_empty_time": 2.9,
+		"ads_time": 0.25, "ads_fov_mult": 0.8, "move_mult": 0.95, "hip_spread": 3.5, "ads_spread": 0.12,
+		"recoil_vertical": 0.55, "recoil_horizontal": 0.25, "penetration": 0.6, "sound": "rifle"},
+	"smg": {"slot": "primary", "fire_mode": "auto", "damage_max": 40, "damage_min": 20, "range_min": 12, "range_max": 30,
+		"fire_rate_rpm": 850, "magazine": 30, "reserve_mags": 5, "reload_time": 1.9, "reload_empty_time": 2.4,
+		"ads_time": 0.18, "ads_fov_mult": 0.85, "move_mult": 1.0, "hip_spread": 2.4, "ads_spread": 0.3,
+		"recoil_vertical": 0.45, "recoil_horizontal": 0.35, "penetration": 0.35, "sound": "smg"},
+	"lmg": {"slot": "primary", "fire_mode": "auto", "damage_max": 40, "damage_min": 25, "range_min": 35, "range_max": 70,
+		"fire_rate_rpm": 700, "magazine": 100, "reserve_mags": 2, "reload_time": 6.0, "reload_empty_time": 6.5,
+		"ads_time": 0.42, "ads_fov_mult": 0.78, "move_mult": 0.85, "hip_spread": 5.5, "ads_spread": 0.18,
+		"recoil_vertical": 0.5, "recoil_horizontal": 0.4, "penetration": 0.9, "sound": "lmg", "sprint_out_time": 0.4},
+	"sniper": {"slot": "primary", "fire_mode": "semi", "damage_max": 70, "damage_min": 70, "range_min": 999, "range_max": 1000,
+		"head_mult": 1.5, "chest_mult": 1.5, "fire_rate_rpm": 200, "magazine": 10, "reserve_mags": 3, "reload_time": 3.0,
+		"reload_empty_time": 3.6, "ads_time": 0.4, "ads_fov_mult": 0.22, "move_mult": 0.9, "hip_spread": 8.0,
+		"ads_spread": 0.0, "recoil_vertical": 2.5, "recoil_horizontal": 0.6, "penetration": 1.0, "sound": "sniper",
+		"sprint_out_time": 0.4},
+	"pistol": {"slot": "secondary", "fire_mode": "semi", "damage_max": 40, "damage_min": 20, "range_min": 10, "range_max": 25,
+		"fire_rate_rpm": 600, "magazine": 15, "reserve_mags": 4, "reload_time": 1.6, "reload_empty_time": 2.0,
+		"ads_time": 0.15, "ads_fov_mult": 0.9, "move_mult": 1.0, "hip_spread": 2.2, "ads_spread": 0.35,
+		"recoil_vertical": 1.0, "recoil_horizontal": 0.35, "penetration": 0.3, "sound": "pistol", "swap_time": 0.35},
+	"machine_pistol": {"slot": "secondary", "fire_mode": "auto", "damage_max": 30, "damage_min": 20, "range_min": 8, "range_max": 22,
+		"fire_rate_rpm": 900, "magazine": 20, "reserve_mags": 4, "reload_time": 1.7, "reload_empty_time": 2.1,
+		"ads_time": 0.16, "ads_fov_mult": 0.9, "move_mult": 1.0, "hip_spread": 2.6, "ads_spread": 0.6,
+		"recoil_vertical": 0.6, "recoil_horizontal": 0.5, "penetration": 0.25, "sound": "smg", "swap_time": 0.35},
+	"shotgun": {"slot": "secondary", "fire_mode": "pump", "damage_max": 40, "damage_min": 10, "range_min": 6, "range_max": 18,
+		"pellets": 8, "head_mult": 1.0, "fire_rate_rpm": 70, "magazine": 6, "reserve_mags": 4, "reload_time": 0.5,
+		"reload_empty_time": 0.5, "ads_time": 0.2, "ads_fov_mult": 0.9, "move_mult": 1.0, "hip_spread": 5.0,
+		"ads_spread": 4.0, "recoil_vertical": 3.0, "recoil_horizontal": 0.8, "penetration": 0.2, "sound": "shotgun"},
+	"launcher": {"slot": "secondary", "fire_mode": "launcher", "damage_max": 150, "damage_min": 150, "range_min": 999, "range_max": 1000,
+		"fire_rate_rpm": 30, "magazine": 1, "reserve_mags": 1, "reload_time": 3.5, "reload_empty_time": 3.5,
+		"ads_time": 0.4, "ads_fov_mult": 0.75, "move_mult": 0.9, "hip_spread": 1.5, "ads_spread": 0.0,
+		"recoil_vertical": 2.0, "recoil_horizontal": 0.5, "penetration": 0.0, "projectile_speed": 60.0,
+		"blast_radius": 6.0, "sound": "launcher", "swap_time": 0.8},
+}
+
+## id, name, class, unlock rank + any stat overrides. Shotgun reloads are per shell.
 const WEAPONS := [
-	["kestrel_ar", "Kestrel AR", "assault", "primary", 1, 30, 750, 30, 45],
-	["mako_5", "Mako-5", "assault", "primary", 4, 28, 800, 30, 40],
-	["halberd", "Halberd", "assault", "primary", 10, 40, 500, 20, 55],
-	["vex_carbine", "Vex Carbine", "assault", "primary", 28, 30, 700, 30, 45],
-	["tempest", "Tempest", "assault", "primary", 40, 26, 900, 30, 35],
-	["bastion", "Bastion", "assault", "primary", 58, 35, 650, 30, 50],
-	["ironwood", "Ironwood", "assault", "primary", 70, 40, 600, 30, 45],
-	["wasp", "Wasp", "smg", "primary", 1, 25, 900, 32, 20],
-	["ratchet_45", "Ratchet-45", "smg", "primary", 12, 35, 650, 25, 18],
-	["hummingbird", "Hummingbird", "smg", "primary", 22, 22, 1100, 35, 15],
-	["viper", "Viper", "smg", "primary", 44, 28, 850, 30, 22],
-	["anvil", "Anvil", "lmg", "primary", 1, 32, 650, 100, 50],
-	["brute", "Brute", "lmg", "primary", 32, 40, 550, 100, 55],
-	["longhaul", "Longhaul", "lmg", "primary", 52, 30, 800, 100, 45],
-	["heron", "Heron", "sniper", "primary", 1, 98, 40, 5, 150],
-	["spindle", "Spindle", "sniper", "primary", 20, 70, 180, 10, 120],
-	["bolt_12", "Bolt-12", "sniper", "primary", 36, 120, 35, 5, 160],
-	["lancewood", "Lancewood", "sniper", "primary", 56, 60, 250, 10, 110],
-	["pip", "Pip", "pistol", "secondary", 1, 30, 400, 12, 15],
-	["hornet", "Hornet", "pistol", "secondary", 14, 35, 380, 15, 18],
-	["magnum_six", "Magnum Six", "pistol", "secondary", 34, 60, 150, 6, 20],
-	["buzzsaw", "Buzzsaw", "machine_pistol", "secondary", 18, 22, 1000, 20, 12],
-	["stinger", "Stinger", "machine_pistol", "secondary", 48, 26, 900, 24, 14],
-	["thumper", "Thumper", "shotgun", "secondary", 1, 15, 70, 6, 10],
-	["breacher", "Breacher", "shotgun", "secondary", 26, 12, 300, 8, 8],
-	["riot_twin", "Riot Twin", "shotgun", "secondary", 46, 20, 150, 2, 12],
-	["thudder", "Thudder", "launcher", "secondary", 1, 150, 30, 1, 60],
-	["sparrow", "Sparrow", "launcher", "secondary", 30, 150, 30, 1, 100],
+	# Assault rifles
+	{"id": "m4a1", "name": "M4A1", "class": "assault", "rank": 1, "fire_rate_rpm": 800, "recoil_vertical": 0.45},
+	{"id": "m16a4", "name": "M16A4", "class": "assault", "rank": 1, "fire_mode": "burst", "damage_max": 40, "damage_min": 30,
+		"fire_rate_rpm": 900, "recoil_vertical": 0.5},
+	{"id": "ak74", "name": "AK-74", "class": "assault", "rank": 4, "fire_rate_rpm": 650, "damage_max": 32, "damage_min": 22,
+		"recoil_vertical": 0.55, "recoil_horizontal": 0.3},
+	{"id": "scar_h", "name": "SCAR-H", "class": "assault", "rank": 8, "magazine": 20, "fire_rate_rpm": 600, "damage_max": 40,
+		"damage_min": 30, "recoil_vertical": 0.75, "sound": "rifle_heavy"},
+	{"id": "g36c", "name": "G36C", "class": "assault", "rank": 12, "fire_rate_rpm": 750, "recoil_vertical": 0.42, "recoil_horizontal": 0.2},
+	{"id": "famas", "name": "FAMAS F1", "class": "assault", "rank": 16, "fire_mode": "burst", "damage_max": 40, "damage_min": 30,
+		"magazine": 25, "fire_rate_rpm": 1000, "recoil_vertical": 0.45},
+	{"id": "aug", "name": "AUG A3", "class": "assault", "rank": 24, "fire_rate_rpm": 700, "damage_max": 33, "damage_min": 22,
+		"recoil_vertical": 0.38, "ads_time": 0.28},
+	{"id": "fal", "name": "FN FAL", "class": "assault", "rank": 32, "fire_mode": "semi", "magazine": 20, "damage_max": 55,
+		"damage_min": 34, "fire_rate_rpm": 650, "recoil_vertical": 1.0, "sound": "rifle_heavy"},
+	{"id": "hk416", "name": "HK416", "class": "assault", "rank": 48, "fire_rate_rpm": 850, "recoil_vertical": 0.4, "recoil_horizontal": 0.18},
+	{"id": "ak47", "name": "AK-47", "class": "assault", "rank": 70, "fire_rate_rpm": 600, "damage_max": 40, "damage_min": 30,
+		"recoil_vertical": 0.7, "recoil_horizontal": 0.4, "sound": "rifle_heavy"},
+	# Submachine guns
+	{"id": "mp5", "name": "MP5", "class": "smg", "rank": 1, "fire_rate_rpm": 800, "recoil_vertical": 0.35},
+	{"id": "ump45", "name": "UMP45", "class": "smg", "rank": 4, "magazine": 25, "fire_rate_rpm": 650, "damage_min": 35,
+		"range_max": 35, "recoil_vertical": 0.5},
+	{"id": "p90", "name": "P90", "class": "smg", "rank": 18, "magazine": 50, "fire_rate_rpm": 900, "damage_max": 34, "recoil_vertical": 0.35},
+	{"id": "mp7", "name": "MP7", "class": "smg", "rank": 26, "magazine": 40, "fire_rate_rpm": 950, "damage_max": 34, "recoil_vertical": 0.4},
+	{"id": "vector", "name": "Vector", "class": "smg", "rank": 40, "magazine": 25, "fire_rate_rpm": 1100, "recoil_vertical": 0.25,
+		"recoil_horizontal": 0.2},
+	{"id": "mini_uzi", "name": "Mini-Uzi", "class": "smg", "rank": 44, "magazine": 32, "fire_rate_rpm": 1000, "recoil_vertical": 0.55,
+		"recoil_horizontal": 0.55},
+	# Light machine guns
+	{"id": "m249", "name": "M249", "class": "lmg", "rank": 1, "fire_rate_rpm": 750, "damage_max": 38},
+	{"id": "rpk", "name": "RPK", "class": "lmg", "rank": 16, "magazine": 75, "fire_rate_rpm": 600, "damage_max": 40, "damage_min": 30,
+		"reload_time": 4.0, "reload_empty_time": 4.5},
+	{"id": "m60e4", "name": "M60E4", "class": "lmg", "rank": 36, "fire_rate_rpm": 550, "damage_max": 50, "damage_min": 30,
+		"recoil_vertical": 0.7, "sound": "rifle_heavy"},
+	{"id": "pkm", "name": "PKM", "class": "lmg", "rank": 52, "fire_rate_rpm": 650, "damage_max": 45, "damage_min": 32,
+		"recoil_vertical": 0.65, "sound": "rifle_heavy"},
+	# Sniper rifles
+	{"id": "m24", "name": "M24", "class": "sniper", "rank": 1, "fire_mode": "bolt", "magazine": 5, "damage_max": 98, "damage_min": 98,
+		"fire_rate_rpm": 45, "recoil_vertical": 3.5},
+	{"id": "svd", "name": "SVD", "class": "sniper", "rank": 20, "fire_rate_rpm": 250, "recoil_vertical": 2.2},
+	{"id": "m14ebr", "name": "M14 EBR", "class": "sniper", "rank": 30, "magazine": 20, "damage_max": 70, "damage_min": 50,
+		"range_min": 50, "range_max": 100, "fire_rate_rpm": 350, "recoil_vertical": 1.6, "hip_spread": 6.0},
+	{"id": "m107", "name": "M107", "class": "sniper", "rank": 56, "damage_max": 98, "damage_min": 98, "fire_rate_rpm": 180,
+		"recoil_vertical": 3.0, "ads_time": 0.5, "sound": "sniper_heavy"},
+	# Pistols
+	{"id": "m9", "name": "M9", "class": "pistol", "rank": 1},
+	{"id": "usp45", "name": "USP .45", "class": "pistol", "rank": 1, "magazine": 12, "damage_min": 30, "recoil_vertical": 1.2},
+	{"id": "p226", "name": "P226", "class": "pistol", "rank": 22, "damage_max": 45, "damage_min": 25},
+	{"id": "magnum", "name": ".44 Magnum", "class": "pistol", "rank": 28, "magazine": 6, "damage_max": 60, "damage_min": 40,
+		"fire_rate_rpm": 200, "recoil_vertical": 3.5, "reload_time": 2.6, "reload_empty_time": 2.6, "sound": "magnum"},
+	# Machine pistols
+	{"id": "skorpion", "name": "Skorpion", "class": "machine_pistol", "rank": 1},
+	{"id": "tmp", "name": "TMP", "class": "machine_pistol", "rank": 38, "magazine": 15, "recoil_vertical": 0.45},
+	{"id": "m93r", "name": "M93R", "class": "machine_pistol", "rank": 50, "fire_mode": "burst", "damage_max": 40, "fire_rate_rpm": 1100},
+	# Shotguns
+	{"id": "m1014", "name": "M1014", "class": "shotgun", "rank": 1, "fire_mode": "semi", "damage_max": 30, "fire_rate_rpm": 240,
+		"magazine": 6},
+	{"id": "spas12", "name": "SPAS-12", "class": "shotgun", "rank": 6, "damage_max": 40, "magazine": 8},
+	{"id": "double_barrel", "name": "Double Barrel", "class": "shotgun", "rank": 12, "fire_mode": "semi", "magazine": 2,
+		"fire_rate_rpm": 400, "damage_max": 42, "reload_time": 2.0, "reload_empty_time": 2.0},
+	{"id": "aa12", "name": "AA-12", "class": "shotgun", "rank": 42, "fire_mode": "auto", "magazine": 8, "pellets": 6,
+		"damage_max": 25, "fire_rate_rpm": 300, "reload_time": 2.8, "reload_empty_time": 3.2, "recoil_vertical": 1.2},
+	# Launchers
+	{"id": "rpg7", "name": "RPG-7", "class": "launcher", "rank": 1, "reserve_mags": 1},
+	{"id": "at4", "name": "AT4", "class": "launcher", "rank": 14, "projectile_speed": 80.0, "reload_time": 4.0},
+	{"id": "m79", "name": "M79", "class": "launcher", "rank": 24, "projectile_speed": 40.0, "projectile_gravity": 9.8,
+		"blast_radius": 5.0, "damage_max": 130, "damage_min": 130, "reserve_mags": 4, "reload_time": 2.5, "reload_empty_time": 2.5},
 ]
 
 ## [id, name, kind, unlock rank, description]
@@ -312,18 +389,21 @@ func _build_items() -> void:
 		c.unlock_rank = 0
 		_register(c)
 
-	for row in WEAPONS:
+	for row: Dictionary in WEAPONS:
 		var w := WeaponData.new()
-		w.id = row[0]
+		w.id = row["id"]
 		w.kind = "weapon"
-		w.display_name = row[1]
-		w.weapon_class = row[2]
-		w.slot = row[3]
-		w.unlock_rank = row[4]
-		w.damage = row[5]
-		w.fire_rate_rpm = row[6]
-		w.magazine = row[7]
-		w.range_m = row[8]
+		w.display_name = row["name"]
+		w.weapon_class = row["class"]
+		w.unlock_rank = row["rank"]
+		w.model = row.get("model", w.id)
+		var stats: Dictionary = WEAPON_CLASS_DEFAULTS[w.weapon_class].duplicate()
+		for key: String in row:
+			if not key in ["id", "name", "class", "rank", "model"]:
+				stats[key] = row[key]
+		for key: String in stats:
+			assert(key in w, "Unknown weapon stat %s on %s" % [key, w.id])
+			w.set(key, stats[key])
 		w.attachment_unlocks = ATTACHMENT_TRACKS[w.weapon_class].duplicate()
 		_register(w)
 
