@@ -243,6 +243,7 @@ def params(mat):
         "wear": float(mat.get("wear", 1.0)),
         "seed": float(mat.get("seed", 0.0)),
         "crease": float(mat.get("crease", 1.0)),
+        "camo_scale": float(mat.get("camo_scale", 1.0)),
     }
 
 
@@ -357,9 +358,34 @@ def layers(g, p, masks, dust_on=True):
         col = g.mixc(grime, col, (0.12, 0.09, 0.05))
         rough = g.mixf(tarnish, p["rough"], 0.5)
         return col, rough, 1.0, g.mul(fine, 0.2), 0.0001
+    if k == "glove_leather":
+        # Synthetic leather palm: even colour, fine pebble grain, darker in
+        # the creases, a soft sheen on the pads.
+        grain = g.voronoi(1500.0, "F1", o)
+        pores = g.voronoi(3200.0, "F1", o)
+        soft = g.noise(30.0, 3.0, 0.5, o)
+        col = g.mixc(g.mul(g.sub(soft, 0.5), 0.35), base, g.hsv(base, v=1.25))
+        col = g.mixc(g.mul(g.smooth(cavity, 0.2, 0.8), 0.55), col, g.hsv(base, s=1.1, v=0.55))
+        col = g.mixc(g.mul(g.smooth(convex, 0.4, 0.9), 0.25 * wear_amt), col, g.hsv(base, s=0.8, v=1.35))
+        rough = g.add(p["rough"], g.mul(g.sub(grain, 0.5), 0.12))
+        rough = g.mixf(g.mul(g.smooth(convex, 0.4, 0.9), 0.5), rough, p["rough"] - 0.12)
+        height = g.add(g.mul(grain, 0.5), g.mul(pores, 0.2))
+        return col, rough, 0.0, height, 0.00018
+    if k == "glove_fabric":
+        # Stretch nylon on the back of the hand: tight two-way weave.
+        wx = g.wave(5200.0, "X", o)
+        wz = g.wave(5200.0, "Z", o)
+        weave = g.mul(g.add(wx, wz), 0.5)
+        soft = g.noise(25.0, 3.0, 0.5, o)
+        col = g.mixc(g.mul(g.sub(soft, 0.5), 0.3), base, g.hsv(base, v=1.2))
+        col = g.mixc(g.mul(weave, 0.18), col, g.hsv(base, v=1.25))
+        col = g.mixc(g.mul(g.smooth(cavity, 0.2, 0.8), 0.6), col, g.hsv(base, v=0.5))
+        rough = g.add(p["rough"], g.mul(g.sub(weave, 0.5), 0.08))
+        return col, rough, 0.0, g.mul(weave, 0.6), 0.00012
     if k in ("fabric", "webbing", "nylon"):
         if p["pattern"] >= 0:
-            col = _camo(g, p, o)
+            s = p["camo_scale"]
+            col = _camo(g, p, g.mapping(o, scale=(s, s, s)) if s != 1.0 else o)
         else:
             col = g.mixc(0.5, base, g.mixc(tint, (0, 0, 0), base, "MULTIPLY"))
         weave_s = 2600.0 if k == "fabric" else 1500.0

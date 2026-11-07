@@ -653,15 +653,17 @@ def finish_soldier(fname, parts):
 # one baked texture atlas. tools/rig_arms.py adds the skeleton after export.
 
 LEFT_REF = Vector((0.0, 0.25, 0.04))  # typical LeftHand marker (bottom of the handguard)
-GLOVE_H = 0.00045  # detail mesh (normal map source)
+# GUNFARE_ARMS_FAST=1 makes a quick preview build (coarser detail, 1024 textures).
+FAST = os.environ.get("GUNFARE_ARMS_FAST") == "1"
+GLOVE_H = 0.0006 if FAST else 0.00045  # detail mesh (normal map source)
 SLEEVE_H = 0.0011
 GLOVE_LOW_H = 0.00125  # game mesh, before decimation
 SLEEVE_LOW_H = 0.0025
 GLOVE_TRIS = 32000
 SLEEVE_TRIS = 8000
 GLOVE_COLOURS = {
-    "sentinel": {"palm": (0.27, 0.22, 0.16), "back": (0.4, 0.35, 0.26), "pad": (0.2, 0.18, 0.14), "cuff": (0.3, 0.27, 0.2)},
-    "militia": {"palm": (0.05, 0.05, 0.052), "back": (0.085, 0.085, 0.09), "pad": (0.035, 0.035, 0.037), "cuff": (0.06, 0.06, 0.065)},
+    "sentinel": {"palm": (0.33, 0.27, 0.19), "back": (0.47, 0.41, 0.31), "pad": (0.25, 0.22, 0.17), "cuff": (0.36, 0.32, 0.24)},
+    "militia": {"palm": (0.11, 0.11, 0.115), "back": (0.16, 0.16, 0.17), "pad": (0.075, 0.075, 0.08), "cuff": (0.13, 0.13, 0.14)},
 }
 
 
@@ -704,8 +706,8 @@ def _decimated(src, name, tris):
 def _glove_mats(fname, m):
     c = {k: _lin(v) for k, v in GLOVE_COLOURS[fname].items()}
     return [
-        g.material("Gloves", c["palm"], 0.0, 0.62, kind="leather", seed=3.0, crease=0.2, wear=0.3),
-        g.material("GloveFabric", c["back"], 0.0, 0.85, kind="fabric", seed=6.0, pattern=-1, wear=0.4),
+        g.material("Gloves", c["palm"], 0.0, 0.58, kind="glove_leather", seed=3.0, wear=0.4),
+        g.material("GloveFabric", c["back"], 0.0, 0.78, kind="glove_fabric", seed=6.0),
         g.material("GlovePad", c["pad"], 0.0, 0.5, kind="rubber", seed=7.0),
         g.material("GloveCuff", c["cuff"], 0.0, 0.8, kind="nylon", seed=8.0, pattern=-1),
     ]
@@ -714,6 +716,7 @@ def _glove_mats(fname, m):
 def build_arms(fname):
     import hand_anatomy as ha
     m = faction_mats(FACTIONS[fname])
+    m["uniform"]["camo_scale"] = 1.7  # finer pattern at first-person scale
     glove_mats = _glove_mats(fname, m)
     lows = []
     high = {}
@@ -738,7 +741,7 @@ def build_arms(fname):
         print("arm %s: glove %d faces, sleeve %d faces, game mesh %d faces" % (
             name, len(hi_g.data.polygons), len(hi_s.data.polygons), len(low.data.polygons)))
     out = os.path.join(OUT, "arms_%s.gltf" % fname)
-    texlib.bake_textures(lows, os.path.join(OUT, "textures"), "arms_%s" % fname, res=2048, profile="arms", high=high)
+    texlib.bake_textures(lows, os.path.join(OUT, "textures"), "arms_%s" % fname, res=1024 if FAST else 2048, profile="arms", high=high)
     for objs in high.values():
         for o in objs:
             bpy.data.objects.remove(o, do_unlink=True)

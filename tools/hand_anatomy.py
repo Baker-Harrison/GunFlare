@@ -58,18 +58,18 @@ def hand_spec(prefix):
     left = np.array(LEFT_REF)
     if prefix == "R":
         return dict(centre=top + gax * 0.045, axis=-gax, side=(0.55, -1.0, 0.0), radius=0.019,
-                    handed=1, arc=1.35, index_straight=((0, 1, 0.05), (-1, 0, 0), (0, 0, -1)), thumb=("wrap", 0.75),
-                    starts=[0.65, 0.68, 0.7, 0.72], curls=[1.0] * 4, elbow=(0.06, -0.3, -0.16), offset=np.zeros(3))
+                    handed=1, arc=1.35, index_straight=((0, 1, 0.05), (-1, 0, 0), (0, 0, -1)), thumb=("wrap", 0.95),
+                    starts=[0.65, 0.66, 0.71, 0.78], curls=[1.0, 0.97, 1.03, 1.1], elbow=(0.06, -0.3, -0.16), offset=np.zeros(3))
     if prefix == "L":
         hc = left + np.array([0.0, 0.0, 0.024])
         return dict(centre=hc + np.array([0.0, -0.02, 0.0]), axis=(0, 1, 0), side=(-0.45, 0.0, -1.0), radius=0.026,
                     handed=-1, arc=1.2, index_straight=None, thumb=("straight", 1.0),
-                    starts=[0.62, 0.62, 0.64, 0.66], curls=[0.62, 0.66, 0.66, 0.66], elbow=(-0.12, -0.24, -0.2),
+                    starts=[0.6, 0.62, 0.66, 0.71], curls=[0.58, 0.66, 0.7, 0.76], elbow=(-0.12, -0.24, -0.2),
                     offset=left)
     pc = top + gax * 0.05 + np.array([-0.012, 0.01, 0.0])
     return dict(centre=pc, axis=-gax, side=(-1.0, 0.6, 0.0), radius=0.04, handed=-1, arc=1.0,
-                index_straight=None, thumb=("straight", 1.0), starts=[0.55, 0.55, 0.58, 0.6],
-                curls=[0.8, 0.85, 0.85, 0.85], elbow=(-0.14, -0.26, -0.16), offset=np.zeros(3))
+                index_straight=None, thumb=("straight", 1.0), starts=[0.55, 0.57, 0.61, 0.66],
+                curls=[0.92, 0.97, 1.0, 1.04], elbow=(-0.14, -0.26, -0.16), offset=np.zeros(3))
 
 
 class Cylinder:
@@ -209,7 +209,12 @@ class Seg:
         d = np.sqrt(l2 + e * e) - r
         if self.seam:
             # Side seam where the palm leather meets the back fabric.
-            d = d + 0.00032 * np.exp(-((v / 0.00075) ** 2)) * (np.abs(u) > rw * 0.5)
+            side = np.abs(u) > rw * 0.5
+            d = d + 0.00034 * np.exp(-((v / 0.00075) ** 2)) * side
+            # Stitches: short raised dashes beside the seam.
+            hh = t * self.L + e
+            dash = np.clip((np.cos(hh * (2 * np.pi / 0.0026)) - 0.2) / 0.8, 0.0, 1.0)
+            d = d - 0.00018 * dash * np.exp(-(((np.abs(v) - 0.0013) / 0.0005) ** 2)) * side
         if self.crease:
             # Compression creases on the palm side of the joint, and two
             # smaller folds just past it.
@@ -338,6 +343,18 @@ class Arm:
         wx = _n(cy.axis - self.fore_dir * cy.axis.dot(self.fore_dir))
         self.palm.append(Seg(self.wrist - self.fore_dir * 0.012, self.wrist + self.fore_dir * 0.03,
                              (0.029, 0.021), (0.03, 0.022), wx, wz, "Wrist", None))
+        # Metacarpal heads: the knuckle ridge on the back of the hand.
+        for name in ("Index", "Middle", "Ring", "Pinky"):
+            fz = chain_frames(h, name)[0]
+            rt0 = [f for f in FINGERS if f[0] == name][0][4]
+            c = np.asarray(h["chains"][name]["pts"][0]) - fz["z"] * rt0 * 0.42 - fz["y"] * 0.003
+            kb = np.stack([fz["x"], fz["y"], fz["z"]], axis=1)
+            self.palm.append(Ell(c, kb, (rt0 * 0.88, rt0 * 0.75, rt0 * 0.62), "Hand", name, ZONE_FABRIC))
+        # Thumb web between the thumb and the index finger.
+        i0 = np.asarray(h["chains"]["Index"]["pts"][0])
+        t1 = np.asarray(t_ch["pts"][1])
+        web_a = t_base + (t1 - t_base) * 0.35
+        self.palm.append(Seg(web_a, i0 - cy.axis * 0.004, (0.0075, 0.0055), (0.0068, 0.005), cy.axis, cy.inward(i0), "Hand", "Thumb"))
         # Fingers: three tapered phalanges with a dorsal knuckle bump at each
         # joint, a seam on each side and leather on the palm side and the tip.
         for name in CHAIN_NAMES:
@@ -349,10 +366,10 @@ class Arm:
                 rts = [0.0112, 0.0104, 0.0097, 0.0088]
             else:
                 fr = [f for f in FINGERS if f[0] == name][0][4]
-                rw = min(fr * 1.02, FINGER_SPACING * 0.5 - 0.0011)
+                rw = min(fr * 1.02, FINGER_SPACING * 0.5 - 0.0015)
                 rt = fr * 0.9
-                rws = [rw * t for t in (1.0, 0.94, 0.88, 0.82)]
-                rts = [rt * t for t in (1.0, 0.93, 0.86, 0.74)]
+                rws = [rw * t for t in (1.0, 0.92, 0.84, 0.72)]
+                rts = [rt * t for t in (1.0, 0.91, 0.82, 0.66)]
             parts = []
             for k in range(3):
                 fz = frames[k]
@@ -385,8 +402,11 @@ class Arm:
                          (0.0315, 0.0245), (0.034, 0.0275), wx, wz, "Wrist", None, ZONE_CUFF),
                      Seg(self.wrist + self.fore_dir * 0.052, self.wrist + self.fore_dir * 0.06,
                          (0.0355, 0.029), (0.0355, 0.029), wx, wz, "Wrist", None, ZONE_CUFF),
-                     Seg(self.wrist + self.fore_dir * 0.012 - wz * 0.024, self.wrist + self.fore_dir * 0.04 - wz * 0.026,
-                         (0.019, 0.0035), (0.02, 0.0035), wx, wz, "Wrist", None, ZONE_CUFF)]
+                     # Hook-and-loop strap round the wrist, with a pull tab.
+                     Seg(self.wrist + self.fore_dir * 0.016, self.wrist + self.fore_dir * 0.036,
+                         (0.0335, 0.0265), (0.0345, 0.0275), wx, wz, "Wrist", None, ZONE_PAD),
+                     Seg(self.wrist + self.fore_dir * 0.014 - wz * 0.027 + wx * 0.012, self.wrist + self.fore_dir * 0.038 - wz * 0.028 + wx * 0.018,
+                         (0.012, 0.004), (0.011, 0.004), wx, wz, "Wrist", None, ZONE_PAD)]
         self.wx = wx
         self.wz = wz
         rng = np.random.default_rng({"R": 11, "L": 23, "P": 37}[prefix])
@@ -435,7 +455,11 @@ class Arm:
         v = q @ self.wz
         phi = np.arctan2(v, u)
         rad = np.sqrt(u * u + v * v)
-        r_out = 0.0365 + 0.017 * np.sqrt(t)
+        # Forearm volume: narrow at the wrist, the muscle swell below the
+        # elbow, then the elbow.
+        r_out = 0.039 + 0.016 * np.sqrt(t) + 0.0075 * np.sin(np.clip(t * 1.4, 0.0, 1.0) * np.pi) ** 2
+        # Loose cuff: the sleeve end stands off the glove.
+        r_out = r_out + 0.0045 * np.exp(-np.maximum(h, 0.0) / 0.018)
         # Fabric folds: sharp compression ridges that bunch near the cuff, and
         # long soft folds that spiral up the arm.
         bunch = np.exp(-np.maximum(h - 0.03, 0.0) / 0.08)

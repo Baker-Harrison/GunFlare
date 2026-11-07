@@ -18,6 +18,10 @@ extends Node3D
 const LAYER := 2
 const HIP_OFFSET := Vector3(0.15, -0.155, -0.36)
 const ADS_DISTANCE := 0.26
+## Field of view of the overlay camera. Narrower than the world camera, so
+## the arms and the weapon fill more of the screen.
+const FOV_HIP := 54.0
+const FOV_ADS := 46.0
 ## Rotation pivot in weapon space: behind the grip, towards the shoulder.
 const PIVOT := Vector3(0.0, 0.0, 0.14)
 ## Shoulder positions in camera space for the arm IK.
@@ -958,8 +962,8 @@ func _process(delta: float) -> void:
 		pos += Vector3(-0.05, -0.07, 0.07) * sprint_w
 		rot += Vector3(0.8, 0.25, 0.25) * sprint_w
 	else:
-		pos += Vector3(-0.03, -0.03, 0.03) * sprint_w
-		rot += Vector3(-0.22, 0.55, 0.3) * sprint_w
+		pos += Vector3(-0.025, -0.015, 0.015) * sprint_w
+		rot += Vector3(-0.16, 0.48, 0.26) * sprint_w
 	var sprint_cycle := maxf(sprint_w, 0.0) * sa
 	pos += Vector3(sin(ph) * 0.028, -pow(sin(ph), 2.0) * 0.034, cos(2.0 * ph) * 0.006) * sprint_cycle
 	rot += Vector3(cos(2.0 * ph) * 0.05, sin(ph) * 0.1, sin(ph) * 0.085) * sprint_cycle

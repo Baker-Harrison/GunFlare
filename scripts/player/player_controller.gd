@@ -55,7 +55,7 @@ func setup(s: Soldier, world_env: Environment) -> void:
 	vm_camera.cull_mask = Viewmodel.LAYER
 	vm_camera.near = 0.045
 	vm_camera.far = 10.0
-	vm_camera.fov = 62.0
+	vm_camera.fov = Viewmodel.FOV_HIP
 	vm_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	if world_env:
 		var env := world_env.duplicate() as Environment
@@ -199,7 +199,7 @@ func _process(delta: float) -> void:
 		camera.rotate_object_local(Vector3.RIGHT, sin(_shake_t * 1.3) * a)
 		camera.rotate_object_local(Vector3.FORWARD, cos(_shake_t * 0.9) * a)
 	vm_camera.global_transform = camera.global_transform
-	vm_camera.fov = lerpf(62.0, 50.0, soldier.ads)
+	vm_camera.fov = lerpf(Viewmodel.FOV_HIP, Viewmodel.FOV_ADS, soldier.ads)
 	viewmodel.visible = soldier.alive
 
 
