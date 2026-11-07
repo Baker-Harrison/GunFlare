@@ -358,6 +358,40 @@ def layers(g, p, masks, dust_on=True):
         col = g.mixc(grime, col, (0.12, 0.09, 0.05))
         rough = g.mixf(tarnish, p["rough"], 0.5)
         return col, rough, 1.0, g.mul(fine, 0.2), 0.0001
+    if k == "glove":
+        # One glove material. The mesh colour attribute "Zone" holds soft
+        # weights for the zones: R palm leather, G back fabric, B knuckle
+        # armour, A cuff and strap. Colours: base, base2, base3, base4.
+        att = g.n.new("ShaderNodeAttribute")
+        att.attribute_name = "Zone"
+        w_fab, w_pad, w_cuff = g.sep(att.outputs["Color"])[1], g.sep(att.outputs["Color"])[2], att.outputs["Alpha"]
+        grain = g.voronoi(1500.0, "F1", o)
+        pores = g.voronoi(3200.0, "F1", o)
+        weave = g.mul(g.add(g.wave(5200.0, "X", o), g.wave(5200.0, "Z", o)), 0.5)
+        rib = g.wave(900.0, "Y", o)
+        soft = g.noise(30.0, 3.0, 0.5, o)
+        dirt = g.mul(g.smooth(cavity, 0.2, 0.8), 0.55)
+        hi = g.mul(g.smooth(convex, 0.4, 0.9), 0.22 * wear_amt)
+
+        def tone(c, var):
+            col = g.mixc(g.mul(g.sub(soft, 0.5), var), c, g.hsv(c, v=1.25))
+            col = g.mixc(dirt, col, g.hsv(c, s=1.1, v=0.55))
+            return g.mixc(hi, col, g.hsv(c, s=0.8, v=1.35))
+
+        leather = tone(p["base"], 0.3)
+        fabric = g.mixc(g.mul(weave, 0.15), tone(p["base2"], 0.25), g.hsv(p["base2"], v=1.2))
+        pad = tone(p["base3"], 0.2)
+        cuff = g.mixc(g.mul(rib, 0.2), tone(p["base4"], 0.25), g.hsv(p["base4"], v=0.8))
+        col = g.mixc(w_fab, leather, fabric)
+        col = g.mixc(w_pad, col, pad)
+        col = g.mixc(w_cuff, col, cuff)
+        rough = g.mixf(w_fab, g.add(0.56, g.mul(g.sub(grain, 0.5), 0.12)), 0.8)
+        rough = g.mixf(w_pad, rough, 0.42)
+        rough = g.mixf(w_cuff, rough, 0.85)
+        height = g.mixf(w_fab, g.add(g.mul(grain, 0.5), g.mul(pores, 0.2)), g.mul(weave, 0.6))
+        height = g.mixf(w_pad, height, g.mul(g.voronoi(700.0, "F1", o), 0.3))
+        height = g.mixf(w_cuff, height, g.mul(rib, 0.7))
+        return col, rough, 0.0, height, 0.00016
     if k == "glove_leather":
         # Synthetic leather palm: even colour, fine pebble grain, darker in
         # the creases, a soft sheen on the pads.

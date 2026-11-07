@@ -682,11 +682,30 @@ def _mesh_obj(name, verts, quads, mats, zones=None):
     return obj
 
 
-def _glove_obj(arm, name, lo, hi, step, mats, smooth_iter):
+def _zone_weights(arm, v, q, blur):
+    """Soft zone weights per vertex (palm, back, pad, cuff), blurred over the
+    mesh so the material borders are smooth lines, not triangle steps."""
+    zones = np.minimum(arm.glove_zones(v), 3)
+    w = np.zeros((len(v), 4))
+    w[np.arange(len(v)), zones] = 1.0
+    e = np.concatenate([q[:, [0, 1]], q[:, [1, 2]], q[:, [2, 3]], q[:, [3, 0]]])
+    e = np.concatenate([e, e[:, ::-1]])
+    deg = np.bincount(e[:, 0], minlength=len(v)).astype(float)
+    for _ in range(blur):
+        acc = np.zeros_like(w)
+        np.add.at(acc, e[:, 0], w[e[:, 1]])
+        w = 0.5 * w + 0.5 * acc / np.maximum(deg, 1)[:, None]
+    return w
+
+
+def _glove_obj(arm, name, lo, hi, step, mats, smooth_iter, blur):
     import hand_anatomy as ha
     v, q = ha.build_mesh(arm.glove_sdf, lo, hi, step, smooth_iter=smooth_iter)
-    zones = np.minimum(arm.glove_zones(v[q].mean(axis=1)), 3)
-    return _mesh_obj(name, v, q, mats, zones)
+    obj = _mesh_obj(name, v, q, mats)
+    w = _zone_weights(arm, v, q, blur)
+    att = obj.data.color_attributes.new(name="Zone", type="FLOAT_COLOR", domain="POINT")
+    att.data.foreach_set("color", w.astype(np.float32).ravel())
+    return obj
 
 
 def _decimated(src, name, tris):
@@ -705,12 +724,8 @@ def _decimated(src, name, tris):
 
 def _glove_mats(fname, m):
     c = {k: _lin(v) for k, v in GLOVE_COLOURS[fname].items()}
-    return [
-        g.material("Gloves", c["palm"], 0.0, 0.58, kind="glove_leather", seed=3.0, wear=0.4),
-        g.material("GloveFabric", c["back"], 0.0, 0.78, kind="glove_fabric", seed=6.0),
-        g.material("GlovePad", c["pad"], 0.0, 0.5, kind="rubber", seed=7.0),
-        g.material("GloveCuff", c["cuff"], 0.0, 0.8, kind="nylon", seed=8.0, pattern=-1),
-    ]
+    return [g.material("Gloves", c["palm"], 0.0, 0.6, kind="glove", seed=3.0, wear=0.4,
+                       base2=c["back"], base3=c["pad"], base4=c["cuff"])]
 
 
 def build_arms(fname):
@@ -725,8 +740,8 @@ def build_arms(fname):
         # Detail meshes for the normal map, and game meshes meshed directly at
         # a coarse step (even triangles and clean UV islands), then reduced.
         lo, hi = arm.glove_bounds()
-        hi_g = _glove_obj(arm, name + "_HiGlove", lo, hi, GLOVE_H, glove_mats, 6)
-        lo_g = _decimated(_glove_obj(arm, name + "_GloveSrc", lo, hi, GLOVE_LOW_H, glove_mats, 8), name + "_Glove", GLOVE_TRIS)
+        hi_g = _glove_obj(arm, name + "_HiGlove", lo, hi, GLOVE_H, glove_mats, 6, 4)
+        lo_g = _decimated(_glove_obj(arm, name + "_GloveSrc", lo, hi, GLOVE_LOW_H, glove_mats, 8, 2), name + "_Glove", GLOVE_TRIS)
         lo, hi = arm.sleeve_bounds()
         v, q = ha.build_mesh(arm.sleeve_sdf, lo, hi, SLEEVE_H)
         hi_s = _mesh_obj(name + "_HiSleeve", v, q, [m["uniform"]])
@@ -745,6 +760,9 @@ def build_arms(fname):
     for objs in high.values():
         for o in objs:
             bpy.data.objects.remove(o, do_unlink=True)
+    for o in lows:
+        for att in list(o.data.color_attributes):
+            o.data.color_attributes.remove(att)
     # ArmL origin at the reference marker so the game can place it on any weapon.
     left = bpy.data.objects["ArmL"]
     left.data.transform(Matrix.Translation(-LEFT_REF))

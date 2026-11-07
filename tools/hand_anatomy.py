@@ -64,7 +64,7 @@ def hand_spec(prefix):
         hc = left + np.array([0.0, 0.0, 0.024])
         return dict(centre=hc + np.array([0.0, -0.02, 0.0]), axis=(0, 1, 0), side=(-0.45, 0.0, -1.0), radius=0.026,
                     handed=-1, arc=1.2, index_straight=None, thumb=("straight", 1.0),
-                    starts=[0.6, 0.62, 0.66, 0.71], curls=[0.58, 0.66, 0.7, 0.76], elbow=(-0.12, -0.24, -0.2),
+                    starts=[0.6, 0.62, 0.66, 0.71], curls=[0.58, 0.66, 0.7, 0.76], elbow=(-0.2, -0.22, -0.11),
                     offset=left)
     pc = top + gax * 0.05 + np.array([-0.012, 0.01, 0.0])
     return dict(centre=pc, axis=-gax, side=(-1.0, 0.6, 0.0), radius=0.04, handed=-1, arc=1.0,
@@ -457,9 +457,9 @@ class Arm:
         rad = np.sqrt(u * u + v * v)
         # Forearm volume: narrow at the wrist, the muscle swell below the
         # elbow, then the elbow.
-        r_out = 0.039 + 0.016 * np.sqrt(t) + 0.0075 * np.sin(np.clip(t * 1.4, 0.0, 1.0) * np.pi) ** 2
+        r_out = 0.031 + 0.012 * np.sqrt(t) + 0.0065 * np.sin(np.clip(t * 1.4, 0.0, 1.0) * np.pi) ** 2
         # Loose cuff: the sleeve end stands off the glove.
-        r_out = r_out + 0.0045 * np.exp(-np.maximum(h, 0.0) / 0.018)
+        r_out = r_out + 0.0035 * np.exp(-np.maximum(h, 0.0) / 0.018)
         # Fabric folds: sharp compression ridges that bunch near the cuff, and
         # long soft folds that spiral up the arm.
         bunch = np.exp(-np.maximum(h - 0.03, 0.0) / 0.08)
@@ -481,7 +481,7 @@ class Arm:
         outer = _tube(rad - r, np.abs(h - L * 0.5) - L * 0.5)
         # Opening at the wrist end, 22 mm deep, so the glove cuff goes into
         # the sleeve. The walls stay thick enough for a clean mesh.
-        hole = _tube(rad - (r - 0.006), np.abs(h + 0.039) - 0.061)
+        hole = _tube(rad - (r - 0.0045), np.abs(h + 0.039) - 0.061)
         return np.maximum(outer, -hole)
 
     def glove_bounds(self, pad=0.006):
