@@ -70,10 +70,15 @@ flowchart TD
 
 ## Release steps
 
-1. Set `application/config/version` in `project.godot` to the new number.
-2. Open a pull request and merge it.
-3. Create a tag `v` plus that same number.
-4. Wait until the Release workflow publishes the packages.
+1. Open a pull request.
+2. Merge that pull request into the main branch.
+3. Wait until the Release workflow finishes.
+4. Confirm that the release has Windows, macOS, and Linux packages.
+
+The workflow reads the base version from `project.godot`.
+It adds the workflow run number after that base version.
+The macOS package has an ad-hoc signature.
+macOS can ask the player to approve the app.
 
 ## Local test commands
 

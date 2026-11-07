@@ -40,8 +40,10 @@ Do not add an encryption key to `export_presets.cfg`.
 
 ## Version and updates
 
-The version number is `application/config/version` in `project.godot`.
-A release tag uses the same number, with a `v` prefix.
+The base version number is `application/config/version` in `project.godot`.
+A merge into the main branch publishes a release.
+The release version adds the workflow run number after the base version.
+The packages are Windows, macOS, and Linux.
 A release build can download a newer GitHub release.
 The build closes, installs the files, and starts the game again.
 A source build can show the new version. A source build must not install it.

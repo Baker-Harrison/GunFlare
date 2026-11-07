@@ -2,10 +2,14 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -15,11 +19,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the tag against the project version
+      - name: Set the release version
+        id: version
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          grep -q "config/version=\"${tag}\"" project.godot
-          echo "Release version ${tag}"
+          base=$(sed -n 's/.*config\/version="\([^"]*\)".*/\1/p' project.godot)
+          if ! printf '%s\n' "$base" | grep -Eq '^[0-9]+(\.[0-9]+)+$'; then
+            echo "The base version in project.godot is not a dotted number."
+            exit 1
+          fi
+          version="${base}.${GITHUB_RUN_NUMBER}"
+          sed -i "s/config\/version=\"[^\"]*\"/config\/version=\"${version}\"/" project.godot
+          grep -q "config/version=\"${version}\"" project.godot
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Release version ${version}"
 
       - name: Install system libraries
         run: |
@@ -51,21 +63,32 @@ jobs:
           godot --headless --path . res://tests/test_progression.tscn -- --no-update
           godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20
 
-      - name: Export Windows and Linux
+      - name: Export Windows, macOS, and Linux
         run: |
-          mkdir -p build/windows build/linux
+          mkdir -p build/windows build/linux build/macos
           godot --headless --path . --export-release "Windows" build/windows/GunFare.exe
           godot --headless --path . --export-release "Linux" build/linux/GunFare.x86_64
+          godot --headless --path . --export-release "macOS" build/macos/GunFare.app
           test -f build/windows/GunFare.exe
           test -f build/linux/GunFare.x86_64
+          test -d build/macos/GunFare.app
           (cd build/windows && zip -r ../../GunFare-windows.zip .)
           (cd build/linux && zip -r ../../GunFare-linux.zip .)
+          (cd build/macos && zip -r -y ../../GunFare-macos.zip GunFare.app)
+          unzip -l GunFare-windows.zip | grep -q 'GunFare.exe'
+          unzip -l GunFare-linux.zip | grep -q 'GunFare.x86_64'
+          unzip -l GunFare-macos.zip | grep -q 'GunFare.app'
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          gh release create "$tag" GunFare-windows.zip GunFare-linux.zip \
+          version="${{ steps.version.outputs.version }}"
+          tag="v${version}"
+          gh release create "$tag" \
+            GunFare-windows.zip \
+            GunFare-linux.zip \
+            GunFare-macos.zip \
+            --target "${GITHUB_SHA}" \
             --title "$tag" \
-            --notes "GunFare ${tag#v}. A release build can install this package from the main menu."
+            --notes "GunFare ${version} has Windows, macOS, and Linux packages. A release build can install this package from the main menu."
