@@ -68,7 +68,7 @@ def hand_spec(prefix):
                     offset=left)
     pc = top + gax * 0.05 + np.array([-0.012, 0.01, 0.0])
     return dict(centre=pc, axis=-gax, side=(-1.0, 0.6, 0.0), radius=0.04, handed=-1, arc=1.0,
-                index_straight=None, thumb=("straight", 1.0), starts=[0.55, 0.57, 0.61, 0.66],
+                index_straight=None, thumb=("forward", (0.12, 1.0, 0.18)), starts=[0.55, 0.57, 0.61, 0.66],
                 curls=[0.92, 0.97, 1.0, 1.04], elbow=(-0.14, -0.26, -0.16), offset=np.zeros(3))
 
 
@@ -133,6 +133,14 @@ def hand_chains(s):
         for L in (0.032, 0.026):
             th -= 2 * math.asin(min(L / (2 * rad), 0.99)) * amount
             pts.append(cy.at(th, rad, top + 0.014))
+    elif mode == "forward":
+        # Thumb along the frame, pointing at the muzzle (pistol support hand).
+        th = -arc * 0.5 - 0.35
+        fwd = _n(amount)
+        p1 = cy.at(th, rad, top + 0.012)
+        p2 = p1 + fwd * 0.03
+        p3 = p2 + _n(fwd + np.asarray([0.0, 0.0, -0.15])) * 0.024
+        pts = [t_base, p1, p2, p3]
     else:
         th = -arc * 0.5 - 0.35
         p1 = cy.at(th, rad, top + 0.012)
