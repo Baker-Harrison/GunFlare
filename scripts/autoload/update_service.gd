@@ -170,13 +170,14 @@ try {
         [void]$placed.Add($target)
         Invoke-Retry { Copy-Item -LiteralPath $item.FullName -Destination $target -Recurse -Force } ("Copying " + $item.Name)
     }
-    $canUnblock = [bool](Get-Command Unblock-File -ErrorAction SilentlyContinue)
+    # Unblock-File exists only on Windows. A failure here must not stop the install.
+    $canUnblock = ($PSVersionTable.PSEdition -eq "Desktop" -or $IsWindows) -and [bool](Get-Command Unblock-File -ErrorAction SilentlyContinue)
     foreach ($target in $placed) {
         if (-not $canUnblock) {
             break
         }
         Get-ChildItem -LiteralPath $target -Recurse -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
-            Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue
+            try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch { }
         }
     }
     if (-not (Test-Path -LiteralPath $exePath)) {

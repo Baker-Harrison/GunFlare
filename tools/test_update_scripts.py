@@ -69,6 +69,10 @@ def run(kind: str, work: Path, zip_files: dict[str, str], moved: bool = False) -
     return text, install
 
 
+def read(path: Path) -> str:
+    return path.read_text() if path.exists() else "<missing>"
+
+
 def expect(condition: bool, text: str, failures: list[str]) -> None:
     if not condition:
         failures.append(text)
@@ -85,22 +89,22 @@ def cases(kind: str, failures: list[str]) -> None:
         work.mkdir()
         log, install = run(kind, work, {f"GunFare/{EXE}": "new game", "GunFare/data.pck": "data"})
         expect(log == "OK", f"{kind}: a good package gives OK, not {log!r}", failures)
-        expect((install / EXE).read_text() == "new game", f"{kind}: the executable is new", failures)
-        expect((install / "data.pck").read_text() == "data", f"{kind}: a new file is added", failures)
-        expect((install / "keep.txt").read_text() == "user file", f"{kind}: a user file stays", failures)
+        expect(read(install / EXE) == "new game", f"{kind}: the executable is new", failures)
+        expect(read(install / "data.pck") == "data", f"{kind}: a new file is added", failures)
+        expect(read(install / "keep.txt") == "user file", f"{kind}: a user file stays", failures)
         expect(not leftovers(install), f"{kind}: no backup is left: {leftovers(install)}", failures)
 
         work = Path(tmp) / "moved"
         work.mkdir()
         log, install = run(kind, work, {EXE: "new game"}, moved=True)
         expect(log == f"OK MOVED {install}", f"{kind}: a moved install names the new folder, not {log!r}", failures)
-        expect((install / EXE).read_text() == "new game", f"{kind}: a moved install makes the new folder", failures)
+        expect(read(install / EXE) == "new game", f"{kind}: a moved install makes the new folder", failures)
 
         work = Path(tmp) / "missing"
         work.mkdir()
         log, install = run(kind, work, {"readme.txt": "no game"})
         expect(log.startswith("FAIL") and "does not contain" in log, f"{kind}: a package without the executable fails, not {log!r}", failures)
-        expect((install / EXE).read_text() == "old game", f"{kind}: the old executable stays after a bad package", failures)
+        expect(read(install / EXE) == "old game", f"{kind}: the old executable stays after a bad package", failures)
 
     if kind != "sh":
         return
@@ -111,7 +115,7 @@ def cases(kind: str, failures: list[str]) -> None:
         work.mkdir()
         log, install = run(kind, work, {EXE: "new game", "z z.txt": "x"})
         expect(log.startswith("FAIL"), f"{kind}: a failure in the copy gives FAIL, not {log!r}", failures)
-        expect((install / EXE).read_text() == "old game", f"{kind}: the rollback puts the old executable back", failures)
+        expect(read(install / EXE) == "old game", f"{kind}: the rollback puts the old executable back", failures)
         expect(not (install / "z z.txt").exists(), f"{kind}: the rollback removes the new files", failures)
         expect(not leftovers(install), f"{kind}: no backup is left after a rollback: {leftovers(install)}", failures)
 
