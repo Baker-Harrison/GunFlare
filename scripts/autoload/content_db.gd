@@ -42,6 +42,12 @@ const BONUSES := {
 	"comeback": ["Rebound", 100], # kill after dying 4+ times in a row
 	"posthumous": ["From the Grave", 25], # kill after you died
 	"rescuer": ["Guardian", 50], # kill an enemy shooting a teammate
+	"defender": ["Defender", 50], # kill near a flag you own
+	"attacker": ["Assault", 50], # kill near an enemy flag
+	"capture": ["Captured", 150], # capture an objective
+	"tag_confirm": ["Kill Confirmed", 50],
+	"tag_deny": ["Kill Denied", 50],
+	"streak_kill": ["Streak Kill", 0], # kills by a streak reward (feat only)
 }
 
 const RANK_TITLES := [
