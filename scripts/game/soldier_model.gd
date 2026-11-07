@@ -2,8 +2,9 @@ class_name SoldierModel
 extends Node3D
 ## Third-person body: a jointed rig animated procedurally (walk, sprint,
 ## crouch, prone, aim pitch, recoil), with per-zone hitboxes, and a physics
-## ragdoll on death. Part meshes come from the faction's character scene when
-## available, else from built-in primitives.
+## ragdoll on death. The visible body is the faction's skinned character
+## (tools/blender/build_characters.py). A SkinFollower copies the joints onto
+## its bones. Without that file, built-in primitives are used.
 
 const FACTIONS := [
 	{"name": "Task Force Sentinel", "fatigue": Color(0.36, 0.38, 0.27), "fatigue2": Color(0.55, 0.5, 0.36),
@@ -220,51 +221,59 @@ func _build_rig() -> void:
 	_apply_character_model(fatigue)
 
 
-const CHARACTER_FILES := ["res://assets/characters/soldier_sentinel.glb", "res://assets/characters/soldier_militia.glb"]
+const CHARACTER_FILES := ["res://assets/characters/soldier_sentinel", "res://assets/characters/soldier_militia"]
 static var _char_scenes: Dictionary = {}
+var _body: Node3D
+var _follower: SkinFollower
 
 
-## Swap primitive meshes for the faction's modelled body parts when available.
-func _apply_character_model(fatigue: Material) -> void:
-	var path: String = CHARACTER_FILES[faction]
-	if not ResourceLoader.exists(path):
+static func _character_scene(f: int) -> PackedScene:
+	var base: String = CHARACTER_FILES[clampi(f, 0, CHARACTER_FILES.size() - 1)]
+	if _char_scenes.has(base):
+		return _char_scenes[base]
+	var scene: PackedScene = null
+	for ext in [".gltf", ".glb"]:
+		if ResourceLoader.exists(base + ext):
+			scene = load(base + ext) as PackedScene
+			break
+	_char_scenes[base] = scene
+	return scene
+
+
+## Replace the primitive meshes with the faction's skinned character.
+func _apply_character_model(_fatigue: Material) -> void:
+	var scene := _character_scene(faction)
+	if scene == null:
 		return
-	if not _char_scenes.has(path):
-		_char_scenes[path] = (load(path) as PackedScene).instantiate()
-	var src: Node = _char_scenes[path]
+	var inst := scene.instantiate() as Node3D
+	var found := inst.find_children("*", "Skeleton3D", true, false)
+	if found.is_empty():
+		inst.free()
+		return
 	for mi in _meshes:
 		mi.queue_free()
 	_meshes.clear()
-	var attach := func(joint: Node3D, part: String) -> void:
-		var n := src.find_child(part, true, false)
-		if n == null:
-			return
-		var copy := n.duplicate() as Node3D
-		copy.transform = Transform3D.IDENTITY
-		copy.set_meta("part", true)
-		joint.add_child(copy)
-		_collect_meshes(copy, fatigue)
-	attach.call(pelvis, "Pelvis")
-	attach.call(torso, "Torso")
-	attach.call(head_node, "Head")
-	for i in 2:
-		attach.call(shoulders[i], "UpperArm")
-		attach.call(elbows[i], "Forearm")
-		attach.call(hips[i], "Thigh")
-		attach.call(knees[i], "Shin")
+	inst.name = "Body"
+	add_child(inst)
+	_body = inst
+	var skel := found[0] as Skeleton3D
+	var map := {
+		"Pelvis": pelvis, "Torso": torso, "Chest": chest, "Head": head_node,
+		"ShoulderL": shoulders[0], "ElbowL": elbows[0], "ShoulderR": shoulders[1], "ElbowR": elbows[1],
+		"HipL": hips[0], "KneeL": knees[0], "HipR": hips[1], "KneeR": knees[1],
+	}
+	_follower = SkinFollower.new()
+	_follower.name = "SkinFollower"
+	skel.add_child(_follower)
+	_follower.setup(skel, map, self)
+	_collect_meshes(inst)
 
 
-func _collect_meshes(n: Node, fatigue: Material) -> void:
+func _collect_meshes(n: Node) -> void:
 	if n is MeshInstance3D:
-		var mi := n as MeshInstance3D
-		_meshes.append(mi)
-		if mi.mesh:
-			for i in mi.mesh.get_surface_count():
-				var m := mi.mesh.surface_get_material(i)
-				if m and m.resource_name == "Fatigue":
-					mi.set_surface_override_material(i, fatigue)
+		_meshes.append(n as MeshInstance3D)
 	for c in n.get_children():
-		_collect_meshes(c, fatigue)
+		_collect_meshes(c)
 
 
 func _box_shape(size: Vector3) -> BoxShape3D:
@@ -444,6 +453,14 @@ func _build_ragdoll(impulse: Vector3) -> void:
 		body_of[j] = rb
 		_ragdoll_bodies.append(rb)
 		rb.apply_central_impulse(impulse * rb.mass * randf_range(0.6, 1.0))
+	if _body and is_instance_valid(_body) and _follower:
+		var bt := _body.global_transform
+		remove_child(_body)
+		holder.add_child(_body)
+		_body.global_transform = bt
+		_follower.retarget(body_of)
+		_body = null
+		_follower = null
 	if gun_model and is_instance_valid(gun_model):
 		var gt := gun_model.global_transform
 		gun_model.get_parent().remove_child(gun_model)

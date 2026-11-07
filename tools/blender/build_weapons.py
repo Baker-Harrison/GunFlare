@@ -27,19 +27,48 @@ def markers(muzzle, optic, under, left, ads):
 
 
 def flash_hider(y, z, m, r=0.011, length=0.05, style="birdcage"):
-    g.cyl("FlashHider", r, length, (0, y + length / 2, z), m, verts=16)
-    if style == "birdcage":
-        for i in range(4):
-            a = i * math.pi / 2 + math.pi / 4
-            g.box("Slot%d" % i, (0.003, length * 0.6, 0.003), (math.cos(a) * r * 0.95, y + length * 0.6, z + math.sin(a) * r * 0.95), m, 0.0004)
-    elif style == "brake":
-        g.box("BrakeL", (0.026, 0.01, 0.01), (0, y + length * 0.3, z), m, 0.001)
-        g.box("BrakeR", (0.026, 0.01, 0.01), (0, y + length * 0.7, z), m, 0.001)
+    """Muzzle device turned on a lathe, with real cut slots."""
+    if style == "brake":
+        fh = g.lathe("FlashHider", [(r * 0.75, 0.0), (r * 0.8, 0.004), (r, 0.006), (r, length - 0.003), (r * 0.9, length)],
+                     (0, y, z), m, verts=32)
+        for i, t in enumerate((0.3, 0.55, 0.8)):
+            c = g.box("BrakeCut%d" % i, (r * 3, length * 0.13, r * 0.7), (0, y + length * t, z), None, 0.0)
+            g.cut(fh, c)
+        return fh
+    prof = [(r * 0.7, 0.0), (r * 0.72, 0.006), (r * 0.95, 0.009), (r * 0.95, 0.016), (r, 0.018), (r, length - 0.002),
+            (r * 0.92, length)]
+    fh = g.lathe("FlashHider", prof, (0, y, z), m, verts=40)
+    bore = g.cyl("FHBore", r * 0.55, length * 0.8, (0, y + length * 0.62, z), None, verts=24, bevel=0.0)
+    g.cut(fh, bore)
+    for i in range(6):
+        if style == "birdcage" and i == 4:
+            continue  # A2 style: closed at the bottom
+        a = i * math.pi / 3 + math.pi / 6
+        c = g.box("Slot%d" % i, (r * 0.36, length * 0.55, r * 0.9), (math.cos(a) * r * 0.85, y + length * 0.64, z + math.sin(a) * r * 0.85), None, 0.0,
+                  rot=(0, -a + math.pi / 2, 0))
+        g.cut(fh, c)
+    return fh
+
+
+def barrel(name, y0, length, z, r, m, profile="rifle"):
+    """Turned barrel with a stepped contour, a gas-block journal and a crown."""
+    if profile == "heavy":
+        prof = [(r * 1.15, 0.0), (r * 1.15, length * 0.35), (r * 1.05, length * 0.38), (r, length * 0.95), (r * 0.9, length)]
+    else:
+        prof = [(r * 1.18, 0.0), (r * 1.18, length * 0.18), (r * 1.0, length * 0.2), (r, length * 0.55), (r * 0.94, length * 0.57),
+                (r * 0.94, length * 0.98), (r * 0.85, length)]
+    return g.lathe(name, prof, (0, y0, z), m, verts=32)
+
+
+def pins(m, spots, r=0.0028, width=0.026):
+    """Cross pins and screws through both sides of a receiver."""
+    for i, (y, z) in enumerate(spots):
+        g.cyl("Pin%d" % i, r, width, (0, y, z), m, axis="X", verts=16, bevel=0.0004)
 
 
 # --- AR-15 family ----------------------------------------------------------------
 
-def ar15(name, barrel=0.36, handguard=0.18, quad_rail=True, carry=False, stock="collapsible", piston=False):
+def ar15(name, barrel_len=0.36, handguard=0.18, quad_rail=True, carry=False, stock="collapsible", piston=False):
     m = g.mats()
     camo = m["camo"]
     # Lower receiver
@@ -82,8 +111,15 @@ def ar15(name, barrel=0.36, handguard=0.18, quad_rail=True, carry=False, stock="
         for i in range(6):
             g.box("HGVent%d" % i, (0.05, 0.012, 0.004), (0, y0 + 0.02 + i * handguard / 6, 0.086), m["polymer"], 0.0008)
         g.cyl("DeltaRing", 0.027, 0.012, (0, y0, 0.062), m["metal"], verts=24)
+    # Receiver hardware.
+    pins(m["metal"], [(0.1, 0.03), (-0.055, 0.03), (0.0, 0.018), (0.018, 0.018)], width=0.0255)
+    g.box("MagRelease", (0.004, 0.012, 0.012), (0.0135, 0.052, 0.022), m["metal"], 0.0012)
+    g.box("BoltCatch", (0.003, 0.03, 0.01), (-0.0135, 0.07, 0.035), m["metal"], 0.0008)
+    g.cyl("Selector", 0.006, 0.004, (-0.0135, -0.03, 0.03), m["metal"], axis="X", verts=16)
+    g.box("SelectorLever", (0.003, 0.016, 0.005), (-0.015, -0.036, 0.03), m["metal"], 0.0008)
+    g.box("DustCoverDoor", (0.0016, 0.058, 0.014), (0.0158, 0.03, 0.06), m["metal"], 0.0004)
     # Barrel, gas block, front sight
-    g.cyl("Barrel", 0.0075, barrel, (0, y0 + barrel / 2, 0.062), m["metal"], verts=16)
+    barrel("Barrel", y0, barrel_len, 0.062, 0.0075, m["metal"])
     fs_y = y0 + handguard + 0.03
     if carry or not quad_rail:
         g.box("GasBlock", (0.02, 0.025, 0.024), (0, fs_y, 0.065), m["metal"], 0.002)
@@ -100,7 +136,7 @@ def ar15(name, barrel=0.36, handguard=0.18, quad_rail=True, carry=False, stock="
         sight_z = 0.113
     if piston:
         g.box("PistonHousing", (0.02, 0.06, 0.012), (0, y0 + handguard - 0.03, 0.08), m["metal"], 0.002)
-    muzzle_y = y0 + barrel
+    muzzle_y = y0 + barrel_len
     flash_hider(muzzle_y, 0.062, m["metal"], 0.0105)
     g.mag_curved("Mag_body", (0, 0.075, -0.012), 0.15, 0.024, 0.06, m["metal"], curve=10)
     markers((0, muzzle_y + 0.05, 0.062), (0, 0.01, 0.087), (0, y0 + handguard * 0.55, 0.035), (0, y0 + handguard * 0.5, 0.04),
@@ -108,15 +144,15 @@ def ar15(name, barrel=0.36, handguard=0.18, quad_rail=True, carry=False, stock="
 
 
 def m4a1():
-    ar15("m4a1", barrel=0.36, handguard=0.18, quad_rail=True)
+    ar15("m4a1", barrel_len=0.36, handguard=0.18, quad_rail=True)
 
 
 def m16a4():
-    ar15("m16a4", barrel=0.5, handguard=0.3, quad_rail=False, carry=True, stock="fixed")
+    ar15("m16a4", barrel_len=0.5, handguard=0.3, quad_rail=False, carry=True, stock="fixed")
 
 
 def hk416():
-    ar15("hk416", barrel=0.36, handguard=0.24, quad_rail=True, piston=True)
+    ar15("hk416", barrel_len=0.36, handguard=0.24, quad_rail=True, piston=True)
 
 
 # --- AK family ------------------------------------------------------------------
@@ -420,7 +456,7 @@ def p90():
     camo = m["camo"]
     g.profile("Body", [(-0.25, 0.08), (0.18, 0.09), (0.24, 0.06), (0.22, -0.02), (0.12, -0.05), (0.08, -0.0), (-0.05, -0.02), (-0.12, 0.0), (-0.25, -0.03)], 0.055, (0, 0, 0), camo, 0.012)
     g.box("ThumbHole", (0.058, 0.04, 0.035), (0, 0.06, -0.012), m["polymer"], 0.008)
-    g.box("Optic", (0.03, 0.1, 0.04), (0, 0.04, 0.115), m["polymer"], 0.005)
+    g.box("SightBody", (0.03, 0.1, 0.04), (0, 0.04, 0.115), m["polymer"], 0.005)
     g.box("OpticGlass", (0.024, 0.003, 0.026), (0, 0.09, 0.118), m["lens"], 0.0005)
     g.cyl("Barrel", 0.008, 0.05, (0, 0.26, 0.04), m["metal"], verts=16)
     root = g.empty("Mag", (0, -0.02, 0.095))
@@ -705,7 +741,7 @@ def rpg7():
     g.cyl("HeatShield", 0.034, 0.3, (0, 0.02, 0.08), m["wood"], verts=24)
     g.pistol_grip("Grip", (0, -0.01, 0.055), m["wood"])
     g.pistol_grip("Grip2", (0, 0.22, 0.055), m["wood"])
-    g.box("Optic", (0.02, 0.1, 0.05), (-0.04, 0.02, 0.12), m["metal"], 0.004)
+    g.box("SightBody", (0.02, 0.1, 0.05), (-0.04, 0.02, 0.12), m["metal"], 0.004)
     root = g.empty("Mag", (0, 0.62, 0.08))
     g.cyl("Warhead", 0.042, 0.2, (0, 0.14, 0.0), m["olive"], verts=24, radius2=0.0, parent=root)
     g.cyl("WarheadBase", 0.042, 0.06, (0, 0.01, 0.0), m["olive"], verts=24, parent=root)
@@ -915,28 +951,41 @@ EQUIPMENT = {
 
 
 def main():
+    """Weapons and attachments are rebuilt by default. Name ids to rebuild only
+    those. Pass --equipment to rebuild the equipment models (plain GLB)."""
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    with_equipment = "--equipment" in argv
+    argv = [a for a in argv if not a.startswith("--")]
     for d in (OUT_W, OUT_A, OUT_E):
         os.makedirs(d, exist_ok=True)
     jobs = []
     for k, fn in WEAPONS.items():
-        jobs.append((k, fn, OUT_W))
+        jobs.append((k, fn, OUT_W, 2048))
     for k, fn in ATTACHMENTS.items():
-        jobs.append((k, fn, OUT_A))
-    for k, fn in EQUIPMENT.items():
-        jobs.append((k, fn, OUT_E))
-    for name, fn, out in jobs:
+        jobs.append((k, fn, OUT_A, 1024))
+    if with_equipment:
+        for k, fn in EQUIPMENT.items():
+            jobs.append((k, fn, OUT_E, 0))
+    failed = []
+    for name, fn, out, res in jobs:
         if argv and name not in argv:
             continue
         g.reset_scene()
         try:
             fn()
-            g.export(os.path.join(out, name + ".glb"))
+            if res:
+                g.export(os.path.join(out, name + ".gltf"), res=res)
+            else:
+                g.export_glb(os.path.join(out, name + ".glb"))
             print("BUILT", name)
         except Exception as e:  # keep going; report at the end
             import traceback
             traceback.print_exc()
             print("FAILED", name, e)
+            failed.append(name)
+    if failed:
+        print("FAILED MODELS:", " ".join(failed))
+        sys.exit(1)
 
 
 main()

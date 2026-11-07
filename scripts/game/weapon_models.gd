@@ -1,10 +1,21 @@
 class_name WeaponModels
-## Builds weapon and equipment models. Uses res://assets/weapons/<id>.glb
-## (made by tools/blender) when present, else a procedural model. Every
+## Builds weapon and equipment models. Uses res://assets/weapons/<id>.gltf
+## (made by tools/blender, with baked PBR textures) or <id>.glb when present,
+## else a procedural model. Every
 ## weapon model carries marker nodes: Muzzle, Optic, Underbarrel, Mag, ADS,
 ## LeftHand. Forward is -Z, origin at the pistol grip.
 
 static var _mats: Dictionary = {}
+static var _camo_maps: Dictionary = {}
+
+
+## Path of the model file for an id in a folder: .gltf first, then .glb.
+static func model_path(folder: String, id: String) -> String:
+	for ext in ["gltf", "glb"]:
+		var p := "res://assets/%s/%s.%s" % [folder, id, ext]
+		if ResourceLoader.exists(p):
+			return p
+	return ""
 
 ## Proportions for procedural models.
 const PROFILES := {
@@ -143,9 +154,9 @@ static func _marker(parent: Node3D, nm: String, pos: Vector3) -> Node3D:
 static func create(weapon_id: String, attachments: Array = [], camo := "") -> Node3D:
 	var data := ContentDB.get_item(weapon_id) as WeaponData
 	var model_id := data.model if data else weapon_id
-	var path := "res://assets/weapons/%s.glb" % model_id
+	var path := model_path("weapons", model_id)
 	var root: Node3D
-	if ResourceLoader.exists(path):
+	if path != "":
 		root = (load(path) as PackedScene).instantiate()
 	else:
 		root = _procedural(weapon_id, data)
@@ -161,16 +172,35 @@ static func create(weapon_id: String, attachments: Array = [], camo := "") -> No
 static func _apply_camo(n: Node, m: Material) -> void:
 	if n is MeshInstance3D:
 		var mi := n as MeshInstance3D
-		var is_camo := mi.has_meta("camo") or mi.name.to_lower().contains("camo") or mi.name.to_lower().contains("body")
-		if not is_camo and mi.mesh:
+		var whole := mi.has_meta("camo") or mi.name.to_lower().contains("camo") or mi.name.to_lower().contains("body")
+		if mi.mesh:
 			for i in mi.mesh.get_surface_count():
 				var sm := mi.mesh.surface_get_material(i)
-				if sm and sm.resource_name.to_lower().contains("camo"):
-					mi.set_surface_override_material(i, m)
-		if is_camo:
+				var is_camo := sm != null and sm.resource_name.to_lower().contains("camo")
+				if whole or is_camo:
+					mi.set_surface_override_material(i, _camo_with_maps(m, sm))
+		elif whole:
 			mi.material_override = m
 	for c in n.get_children():
 		_apply_camo(c, m)
+
+
+## The camo material, with the baked normal and ORM maps of the surface it replaces.
+static func _camo_with_maps(m: Material, base: Material) -> Material:
+	var bm := base as BaseMaterial3D
+	if not (m is ShaderMaterial) or bm == null or bm.normal_texture == null:
+		return m
+	var key := "%d_%d" % [m.get_instance_id(), bm.normal_texture.get_instance_id()]
+	if _camo_maps.has(key):
+		return _camo_maps[key]
+	var c := (m as ShaderMaterial).duplicate() as ShaderMaterial
+	c.set_shader_parameter("use_maps", true)
+	c.set_shader_parameter("normal_map", bm.normal_texture)
+	var orm: Texture2D = bm.roughness_texture if bm.roughness_texture else bm.ao_texture
+	if orm:
+		c.set_shader_parameter("orm_map", orm)
+	_camo_maps[key] = c
+	return c
 
 
 static func _procedural(id: String, data: WeaponData) -> Node3D:
@@ -372,9 +402,9 @@ static func _build_launcher(root: Node3D, kind: String) -> void:
 
 static func _add_attachments(root: Node3D, attachments: Array, data: WeaponData) -> void:
 	for att: String in attachments:
-		var path := "res://assets/attachments/%s.glb" % att
+		var path := model_path("attachments", att)
 		var node: Node3D
-		if ResourceLoader.exists(path):
+		if path != "":
 			node = (load(path) as PackedScene).instantiate()
 		else:
 			node = _procedural_attachment(att)

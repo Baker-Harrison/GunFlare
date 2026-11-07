@@ -11,8 +11,8 @@ const ADS_DISTANCE := 0.26
 var soldier: Soldier
 var gun: Node3D
 var arms: Node3D
-var _left_hand: MeshInstance3D
-var _right_hand: MeshInstance3D
+var _left_hand: Node3D
+var _right_hand: Node3D
 var _mag: Node3D
 var _mag_rest := Vector3.ZERO
 var _ads_marker := Vector3(0, 0.08, 0.1)
@@ -109,10 +109,48 @@ func _find_stock(n: Node) -> void:
 		_find_stock(c)
 
 
+const ARMS_FILES := ["res://assets/characters/arms_sentinel", "res://assets/characters/arms_militia"]
+static var _arms_scenes: Dictionary = {}
+
+
+static func _arms_scene(team: int) -> PackedScene:
+	var base: String = ARMS_FILES[clampi(team, 0, ARMS_FILES.size() - 1)]
+	if _arms_scenes.has(base):
+		return _arms_scenes[base]
+	var scene: PackedScene = null
+	for ext in [".gltf", ".glb"]:
+		if ResourceLoader.exists(base + ext):
+			scene = load(base + ext) as PackedScene
+			break
+	_arms_scenes[base] = scene
+	return scene
+
+
 func _build_arms() -> void:
 	arms = Node3D.new()
 	arms.name = "Arms"
 	gun.add_child(arms)
+	var lh := gun.find_child("LeftHand", true, false) as Node3D
+	var lpos := lh.position if lh else Vector3(0, 0.03, -0.25)
+	var scene := _arms_scene(soldier.team)
+	if scene:
+		# Modelled arms: ArmR holds the grip at the weapon origin. ArmL has its
+		# origin on the LeftHand marker. Pistols use the two-hand support grip.
+		var inst := scene.instantiate() as Node3D
+		arms.add_child(inst)
+		var pistol := (_weapon != null and _weapon.data.weapon_class == "pistol") or lpos.length() < 0.07
+		_right_hand = inst.find_child("ArmR", true, false) as Node3D
+		var left := inst.find_child("ArmL", true, false) as Node3D
+		var left_pistol := inst.find_child("ArmLPistol", true, false) as Node3D
+		if left:
+			left.position = lpos
+			left.visible = not pistol
+		if left_pistol:
+			left_pistol.visible = pistol
+		_left_hand = left_pistol if pistol and left_pistol else left
+		if _left_hand:
+			_left_hand_rest = _left_hand.position
+		return
 	var f: Dictionary = SoldierModel.FACTIONS[clampi(soldier.team, 0, 1)]
 	var sleeve := CamoLibrary.fabric_material(f["fatigue"], f["fatigue2"], f["camo"])
 	var glove := StandardMaterial3D.new()
@@ -122,8 +160,6 @@ func _build_arms() -> void:
 	_right_hand = _arm_piece(arms, Vector3(0.038, 0.06, 0.08), Vector3(0.0, -0.025, 0.035), glove)
 	var r_fore := _arm_capsule(arms, 0.03, 0.3, Vector3(0.03, -0.09, 0.19), Vector3(-1.15, 0.2, 0.0), sleeve)
 	r_fore.name = "RightForearm"
-	var lh := gun.find_child("LeftHand", true, false) as Node3D
-	var lpos := lh.position if lh else Vector3(0, 0.03, -0.25)
 	_left_hand = _arm_piece(arms, Vector3(0.042, 0.05, 0.09), lpos + Vector3(-0.012, -0.03, 0), glove)
 	_left_hand_rest = _left_hand.position
 	_arm_capsule(arms, 0.03, 0.34, lpos + Vector3(-0.09, -0.1, 0.15), Vector3(-1.05, -0.55, 0.3), sleeve).name = "LeftForearm"

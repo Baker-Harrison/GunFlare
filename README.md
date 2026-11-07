@@ -60,6 +60,18 @@ python tools/gen_vo.py             # announcer (Windows TTS)
 blender -b -P tools/blender/build_weapons.py
 blender -b -P tools/blender/build_props.py
 blender -b -P tools/blender/build_characters.py
+python tools/set_texture_imports.py
+```
+
+The weapon, attachment, and character scripts bake PBR textures with Cycles. A bake uses the GPU when Blender finds one. Set `GUNFARE_BAKE_CPU=1` to bake on the CPU. Each model is a glTF file with WebP textures in a `textures` folder next to it.
+
+After a rebuild, start the Godot editor or run `godot --headless --path . --import` one time. Then run `python tools/set_texture_imports.py` and import again. The script sets VRAM compression, mipmaps, and normal-map options on the baked textures.
+
+Preview a model, or a weapon in the first-person view, without Godot:
+
+```
+blender -b -P tools/blender/preview.py -- out.png assets/weapons/m4a1.gltf
+blender -b -P tools/blender/preview_fp.py -- out.png assets/characters/arms_sentinel.gltf assets/weapons/m4a1.gltf
 ```
 
 ## Updates
@@ -81,7 +93,9 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). Do not push 
 ```
 Godot_console.exe --headless --path . res://tests/test_progression.tscn
 Godot_console.exe --headless --path . res://tests/smoke_match.tscn -- <map> <mode> <seconds>
+Godot_console.exe --headless --path . res://tests/test_models.tscn
 ```
+The model test checks that each weapon has its markers and baked textures, and that each soldier has the 12 rig bones.
 The smoke test plays a full bot match (the player is bot-driven) and reports kills, score and progression.
 
 ## Notes

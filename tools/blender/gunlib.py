@@ -7,9 +7,13 @@ the game for attachments, effects and animation.
 """
 import math
 
+import os
+
 import bpy
 import bmesh
 from mathutils import Vector, Matrix
+
+import texlib
 
 _MATS = {}
 
@@ -19,10 +23,32 @@ def reset_scene():
     _MATS.clear()
 
 
-def material(name, color, metallic=0.0, roughness=0.5, alpha=1.0, emission=None):
+def _infer_kind(name, metallic, alpha, emission):
+    n = name.lower()
+    if emission:
+        return "emissive"
+    if alpha < 1.0:
+        return "translucent" if "mag" in n else "glass"
+    if "lens" in n:
+        return "lens"
+    if "wood" in n or "plum" in n:
+        return "wood"
+    if "rubber" in n:
+        return "rubber"
+    if "brass" in n:
+        return "brass"
+    if metallic >= 0.6:
+        return "metal"
+    if "olive" in n or "c4" in n or "gel" in n:
+        return "paint"
+    return "polymer"
+
+
+def material(name, color, metallic=0.0, roughness=0.5, alpha=1.0, emission=None, kind=None, **extra):
     if name in _MATS:
         return _MATS[name]
     m = bpy.data.materials.new(name)
+    texlib.tag(m, kind or _infer_kind(name, metallic, alpha, emission), color, roughness, metallic, **extra)
     m.use_nodes = True
     bsdf = m.node_tree.nodes.get("Principled BSDF")
     bsdf.inputs["Base Color"].default_value = (*color, 1.0)
@@ -51,8 +77,8 @@ def mats():
         "polymer": material("Polymer", (0.035, 0.035, 0.035), 0.0, 0.62),
         "polymer_tan": material("PolymerTan", (0.42, 0.34, 0.22), 0.0, 0.65),
         "polymer_od": material("PolymerOD", (0.16, 0.18, 0.12), 0.0, 0.65),
-        "wood": material("Wood", (0.32, 0.14, 0.05), 0.0, 0.45),
-        "wood_light": material("WoodLight", (0.48, 0.28, 0.12), 0.0, 0.5),
+        "wood": material("Wood", (0.2, 0.085, 0.032), 0.0, 0.42),
+        "wood_light": material("WoodLight", (0.3, 0.16, 0.07), 0.0, 0.48),
         "rubber": material("Rubber", (0.02, 0.02, 0.02), 0.0, 0.85),
         "brass": material("Brass", (0.75, 0.55, 0.22), 1.0, 0.3),
         "glass": material("Glass", (0.1, 0.18, 0.22), 0.3, 0.05, 0.4),
@@ -70,7 +96,7 @@ def _link(obj, parent=None):
     return obj
 
 
-def _finish(obj, mat, bevel, segments=2, parent=None):
+def _finish(obj, mat, bevel, segments=3, parent=None):
     if mat is not None:
         obj.data.materials.append(mat)
     if bevel > 0:
@@ -108,7 +134,13 @@ def box(name, size, loc, mat, bevel=0.002, rot=(0, 0, 0), parent=None, taper=Non
 
 
 def cyl(name, radius, length, loc, mat, axis="Y", verts=24, bevel=0.0008, radius2=None, parent=None, rot=None):
-    """Cylinder along an axis, centred at loc."""
+    """Cylinder along an axis, centred at loc. Barrels get a turned, stepped contour."""
+    if name.startswith("Barrel") and axis == "Y" and rot is None and radius2 is None and length > 0.12:
+        r = radius
+        prof = [(r * 1.15, 0.0), (r * 1.15, length * 0.16), (r * 1.0, length * 0.18), (r, length * 0.6), (r * 0.94, length * 0.62),
+                (r * 0.94, length * 0.985), (r * 0.84, length)]
+        return lathe(name, prof, (loc[0], loc[1] - length / 2, loc[2]), mat, verts=32, parent=parent)
+    verts = max(int(verts * 1.5), 12)
     bm = bmesh.new()
     r2 = radius if radius2 is None else radius2
     bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=verts, radius1=radius, radius2=r2, depth=length)
@@ -139,8 +171,32 @@ def tube(name, r_out, r_in, length, loc, mat, verts=24, parent=None):
     return o
 
 
-def profile(name, points_yz, width, loc, mat, bevel=0.002, parent=None):
-    """Extrude a side profile (list of (y, z)) along X by width. Good for stocks, grips, receivers."""
+def chaikin(points, iterations=2, ratio=0.22):
+    """Rounds the corners of a closed polygon (Chaikin corner cutting)."""
+    pts = list(points)
+    for _ in range(iterations):
+        out = []
+        n = len(pts)
+        for i in range(n):
+            a = Vector(pts[i])
+            b = Vector(pts[(i + 1) % n])
+            out.append(tuple(a.lerp(b, ratio)))
+            out.append(tuple(a.lerp(b, 1 - ratio)))
+        pts = out
+    return pts
+
+
+SMOOTH_PROFILES = ("grip", "stock", "cheek", "handguard", "foregrip", "pump")
+
+
+def profile(name, points_yz, width, loc, mat, bevel=0.002, parent=None, smooth=None):
+    """Extrude a side profile (list of (y, z)) along X by width. Good for stocks, grips, receivers.
+    Grips, stocks and handguards get rounded corners and a moulded, pillowed section."""
+    if smooth is None:
+        smooth = name.lower().startswith(SMOOTH_PROFILES)
+    if smooth:
+        points_yz = chaikin(points_yz, 2, 0.18)
+        bevel = max(bevel, min(width * 0.28, 0.009))
     bm = bmesh.new()
     hw = width / 2
     left = [bm.verts.new((-hw, y, z)) for (y, z) in points_yz]
@@ -158,7 +214,70 @@ def profile(name, points_yz, width, loc, mat, bevel=0.002, parent=None):
     obj = bpy.data.objects.new(name, me)
     _link(obj)
     obj.location = loc
+    if smooth:
+        _finish(obj, mat, 0.0, parent=parent)
+        mod = obj.modifiers.new("Bevel", "BEVEL")
+        mod.width = bevel
+        mod.segments = 5
+        mod.profile = 0.6
+        mod.limit_method = "ANGLE"
+        mod.angle_limit = math.radians(50)
+        mod.harden_normals = True
+        return obj
     return _finish(obj, mat, bevel, parent=parent)
+
+
+def lathe(name, profile_ry, loc, mat, axis="Y", verts=40, parent=None, rot=None):
+    """Solid of revolution. profile_ry: list of (radius, position along the axis)
+    from one end to the other. Good for barrels, muzzle devices, tubes and optics."""
+    bm = bmesh.new()
+    rows = []
+    for r, y in profile_ry:
+        row = []
+        for k in range(verts):
+            a = 2 * math.pi * k / verts
+            row.append(bm.verts.new((math.cos(a) * r, y, math.sin(a) * r)))
+        rows.append(row)
+    for i in range(len(rows) - 1):
+        for k in range(verts):
+            k2 = (k + 1) % verts
+            bm.faces.new((rows[i][k], rows[i][k2], rows[i + 1][k2], rows[i + 1][k]))
+    bm.faces.new(rows[0][::-1])
+    bm.faces.new(rows[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    obj = bpy.data.objects.new(name, me)
+    _link(obj)
+    obj.location = loc
+    if rot is not None:
+        obj.rotation_euler = rot
+    elif axis == "Z":
+        obj.rotation_euler = (math.radians(90), 0, 0)
+    elif axis == "X":
+        obj.rotation_euler = (0, 0, math.radians(-90))
+    _finish(obj, mat, 0.0, parent=parent)
+    mod = obj.modifiers.new("Bevel", "BEVEL")
+    mod.width = 0.0006
+    mod.segments = 2
+    mod.limit_method = "ANGLE"
+    mod.angle_limit = math.radians(35)
+    mod.harden_normals = True
+    return obj
+
+
+def cut(obj, cutter):
+    """Boolean difference, then removes the cutter. Bevel modifiers run after the cut."""
+    mod = obj.modifiers.new("Cut", "BOOLEAN")
+    mod.object = cutter
+    mod.operation = "DIFFERENCE"
+    mod.solver = "EXACT"
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.modifier_move_to_index(modifier=mod.name, index=0)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    bpy.data.objects.remove(cutter, do_unlink=True)
+    return obj
 
 
 def rail(name, length, loc, mat, parent=None, axis="Y"):
@@ -192,6 +311,19 @@ def empty(name, loc, parent=None):
     return e
 
 
+def apply_obj(obj):
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    for mod in list(obj.modifiers):
+        try:
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+        except RuntimeError:
+            obj.modifiers.remove(mod)
+    obj.select_set(False)
+    return obj
+
+
 def apply_all():
     for obj in list(bpy.context.scene.objects):
         if obj.type != "MESH":
@@ -206,22 +338,74 @@ def apply_all():
         obj.select_set(False)
 
 
-def export(path):
+def export_glb(path):
+    """Plain GLB export without baking (equipment models)."""
     apply_all()
-    bpy.ops.export_scene.gltf(
-        filepath=path,
-        export_format="GLB",
-        export_yup=True,
-        export_apply=True,
-        export_materials="EXPORT",
-        use_selection=False,
-    )
+    bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", export_yup=True, export_apply=True,
+                              export_materials="EXPORT", use_selection=False)
+
+
+STOCK_PREFIXES = ("stock", "buttpad", "buffertube", "cheek", "foldstock", "wirestock")
+
+
+def _mag_root(obj):
+    p = obj.parent
+    while p is not None:
+        if p.type == "EMPTY" and p.name.split(".")[0] == "Mag":
+            return p
+        p = p.parent
+    return None
+
+
+def export(path, res=2048, bake=True):
+    """Applies modifiers, joins parts, bakes PBR textures and writes a glTF.
+
+    The parts become: Frame (static body), Stock (hidden by the game when
+    aiming), Mag_body under the Mag marker (moved by reload animations).
+    Glass, lenses and emissive parts stay separate with plain materials.
+    """
+    apply_all()
+    base = os.path.splitext(path)[0]
+    name = os.path.basename(base)
+    out_dir = os.path.dirname(path)
+    groups = {}
+    for o in [o for o in bpy.context.scene.objects if o.type == "MESH"]:
+        for p in o.data.polygons:
+            p.use_smooth = True
+        if not texlib.bakeable(o):
+            continue
+        mag = _mag_root(o)
+        if mag is not None:
+            key = ("Mag_body", mag.name)
+        elif o.name.lower().startswith(STOCK_PREFIXES):
+            key = ("Stock", None)
+        else:
+            key = ("Frame", None)
+        groups.setdefault(key, []).append(o)
+    joined = []
+    for (nm, parent), objs in groups.items():
+        res_obj = texlib.join(objs, nm, bpy.data.objects.get(parent) if parent else None)
+        if res_obj:
+            joined.append(res_obj)
+    if bake and joined:
+        texlib.bake_textures(joined, os.path.join(out_dir, "textures"), name, res=res, profile="weapon")
+    for ext in (".glb", ".gltf", ".bin"):
+        if os.path.exists(base + ext):
+            os.remove(base + ext)
+    texlib.export_gltf(base + ".gltf")
 
 
 # --- Common sub-assemblies ------------------------------------------------------
 
 def pistol_grip(name, loc, mat, angle=18, height=0.11, depth=0.042, width=0.03, parent=None):
-    pts = [(0.0, 0.02), (depth, 0.02), (depth, 0.0), (depth * 0.85, -height), (-depth * 0.05, -height * 1.02), (-depth * 0.15, -height * 0.5), (-depth * 0.05, 0.02)]
+    # Front strap with three finger grooves, a palm swell and a beavertail.
+    d, h = depth, height
+    pts = [(0.0, 0.02), (d, 0.02), (d, 0.0)]
+    for i in range(3):
+        z0 = -h * (0.12 + i * 0.27)
+        pts += [(d * 0.97, z0), (d * 1.04, z0 - h * 0.08), (d * 0.95, z0 - h * 0.2)]
+    pts += [(d * 0.86, -h), (d * 0.3, -h * 1.05), (-d * 0.06, -h * 1.02), (-d * 0.2, -h * 0.62), (-d * 0.16, -h * 0.25),
+            (-d * 0.3, 0.0), (-d * 0.2, 0.02)]
     g = profile(name, pts, width, loc, mat, 0.004, parent=parent)
     g.rotation_euler = (math.radians(-angle), 0, 0)
     return g
