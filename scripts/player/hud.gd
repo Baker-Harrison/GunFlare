@@ -602,9 +602,10 @@ func _draw_countdown(vp: Vector2, m: Node) -> void:
 	var frac := t - floorf(t) if t > 0.0 else 0.0
 	var font_size := int(lerpf(72.0, 96.0, clampf(frac * 1.5 - 0.5, 0.0, 1.0)))
 	var col := RED if secs <= 3 else YELLOW
-	canvas.draw_rect(Rect2(0, c.y - 110, vp.x, 150), Color(0, 0, 0, 0.35))
-	_text(Vector2(0, c.y - 78), "MATCH BEGINS IN", 22, WHITE, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
-	_text(Vector2(0, c.y + 10), str(secs), font_size, col, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
+	# Sit above the crosshair so the player can still aim during the count.
+	canvas.draw_rect(Rect2(0, c.y - 215, vp.x, 150), Color(0, 0, 0, 0.35))
+	_text(Vector2(0, c.y - 183), "MATCH BEGINS IN", 22, WHITE, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
+	_text(Vector2(0, c.y - 95), str(secs), font_size, col, HORIZONTAL_ALIGNMENT_CENTER, vp.x, true)
 
 
 func _draw_scoreboard(vp: Vector2, m: Node) -> void:
