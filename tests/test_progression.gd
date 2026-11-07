@@ -23,7 +23,12 @@ func _ready() -> void:
 	_run(_test_prestige)
 	_run(_test_save_load)
 	_run(_test_update_version)
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
+	_run(_test_update_release_parse)
+	_run(_test_update_block_reasons)
+	_run(_test_update_package_check)
+	_run(_test_update_scripts_embedded)
+	_run(_test_safe_file)
+	SafeFile.remove(TEST_SAVE)
 	print("%d checks, %d failures" % [_checks, _failures.size()])
 	get_tree().quit(1 if _failures.size() > 0 else 0)
 
@@ -54,6 +59,57 @@ func _test_update_version() -> void:
 	check(UpdateService.is_newer("v1.0.0", "0.9.9"), "a v prefix is accepted")
 	check(not UpdateService.is_newer("1.2.0", "1.2"), "1.2.0 matches 1.2")
 	check(UpdateService.is_newer("1.2.1", "1.2"), "1.2.1 is newer than 1.2")
+	check(UpdateService.is_newer("0.1.0.10", "0.1.0.9"), "a run number compares as a number")
+	check(not UpdateService.is_newer("", "0.1.0"), "an empty tag is not newer")
+	check(not UpdateService.is_newer("garbage", "0.1.0"), "a tag that is not a version is not newer")
+
+
+func _release(tag: String, assets: Array) -> Dictionary:
+	return {"tag_name": tag, "draft": false, "prerelease": false, "assets": assets}
+
+
+func _asset(name: String, url: String) -> Dictionary:
+	return {"name": name, "browser_download_url": url, "size": 1234, "digest": "sha256:ABCDEF"}
+
+
+func _test_update_release_parse() -> void:
+	var url := "https://github.com/Baker-Harrison/GunFlare/releases/download/v0.1.0.5/GunFare-windows.zip"
+	var info := UpdateService.pick_asset(_release("v0.1.0.5", [_asset("GunFare-windows.zip", url)]), "GunFare-windows.zip")
+	check(info.get("version") == "0.1.0.5", "the release version has no v prefix")
+	check(info.get("size") == 1234, "the asset size is read")
+	check(info.get("digest") == "abcdef", "the sha256 digest is read in lower case")
+	var bad := _asset("GunFare-windows.zip", "https://example.com/GunFare-windows.zip")
+	check(UpdateService.pick_asset(_release("v0.1.0.5", [bad]), "GunFare-windows.zip").is_empty(), "an asset from another host is refused")
+	var draft := _release("v0.1.0.5", [_asset("GunFare-windows.zip", url)])
+	draft["prerelease"] = true
+	check(UpdateService.pick_asset(draft, "GunFare-windows.zip").is_empty(), "a prerelease is ignored")
+	check(UpdateService.pick_asset({"tag_name": "v1", "assets": "x"}, "GunFare-windows.zip").is_empty(), "bad assets data is ignored")
+	check(UpdateService.pick_asset(_release("v0.1.0.5", []), "GunFare-windows.zip").is_empty(), "a release without the package is ignored")
+	# A newer release changes the state at once, without a restart.
+	var before := UpdateService.current_version
+	UpdateService.current_version = "0.1.0.4"
+	var asset_name: String = str(UpdateService._package()["asset"])
+	var live := _asset(asset_name, url)
+	var emitted := [0]
+	var counter := func() -> void: emitted[0] += 1
+	UpdateService.state_changed.connect(counter)
+	UpdateService.apply_release(_release("v0.1.0.5", [live]))
+	check(UpdateService.status == "available", "a newer release makes the update available")
+	check(UpdateService.message.begins_with("Version 0.1.0.5 is available."), "the message names the new version")
+	UpdateService.apply_release(_release("v0.1.0.5", [live]))
+	check(emitted[0] == 1, "the same release does not emit the signal again")
+	UpdateService.apply_release(_release("v0.1.0.6", [live]))
+	check(UpdateService.remote_version == "0.1.0.6" and emitted[0] == 2, "a later release replaces the earlier one")
+	UpdateService.current_version = "0.1.0.6"
+	UpdateService.apply_release(_release("v0.1.0.6", [live]))
+	check(UpdateService.status == "idle", "the current release clears the banner")
+	UpdateService.state_changed.disconnect(counter)
+	UpdateService.current_version = before
+	UpdateService.remote_version = ""
+	UpdateService.message = ""
+
+
+func _test_update_block_reasons() -> void:
 	var win_temp := PackedStringArray(["C:\\Users\\p\\AppData\\Local\\Temp"])
 	check(UpdateService.is_temporary_dir("C:\\Users\\p\\AppData\\Local\\Temp\\01b0_GunFare-windows.zip.GunFare-windows.zip", "Windows", win_temp), "a copy that runs from a zip installs elsewhere")
 	check(UpdateService.is_temporary_dir("D:/Games/GunFare-windows.zip", "Windows", PackedStringArray()), "a .zip folder is temporary")
@@ -61,6 +117,67 @@ func _test_update_version() -> void:
 	check(UpdateService.is_temporary_dir("/private/var/folders/x/T/AppTranslocation/ABC/d", "macOS", PackedStringArray()), "a translocated app installs elsewhere")
 	check(not UpdateService.is_temporary_dir("/Users/p/Applications", "macOS", PackedStringArray(["/var/folders/x/T/"])), "the Applications folder keeps the update")
 	check(not UpdateService.is_temporary_dir("/home/p/games/GunFare", "Linux", PackedStringArray(["/tmp"])), "a Linux game folder keeps the update")
+	# The folder from the bug report, with a short 8.3 name in TEMP.
+	var report := "C:/Users/thehe/AppData/Local/Temp/01b09247-37b6-43f1-8aa9-af9cbb98b7b8_GunFare-windows.zip.GunFare-windows.zip"
+	check(UpdateService.is_temporary_dir(report, "Windows", PackedStringArray(["C:\\Users\\THEHE~1\\AppData\\Local\\Temp"])), "the folder from the bug report is temporary")
+	check(UpdateService.is_temporary_dir("C:\\Users\\p\\AppData\\Local\\Temp\\Temp1_GunFare-windows.zip", "Windows", PackedStringArray()), "an old Explorer Temp1 folder is temporary")
+	check(UpdateService.is_temporary_dir("/tmp/GunFare", "Linux", PackedStringArray()), "/tmp is temporary on Linux")
+	check(UpdateService.app_bundle_path("/Applications/GunFare.app/Contents/MacOS/GunFare") == "/Applications/GunFare.app", "the app bundle path is found")
+	check(UpdateService.app_bundle_path("/opt/GunFare/GunFare.x86_64") == "", "a Linux path has no app bundle")
+	check(UpdateService.friendly_error("FAIL The process cannot access the file 'x' because it is being used by another process.").contains("Close all GunFare windows"), "a locked file gives clear help")
+	check(UpdateService.friendly_error(char(0xFEFF) + "FAIL Access to the path is denied.").contains("folder that you own"), "a denied write gives clear help")
+
+
+func _test_update_package_check() -> void:
+	var path := ProjectSettings.globalize_path("user://test_package.zip")
+	var packer := ZIPPacker.new()
+	check(packer.open(path) == OK, "the test zip opens")
+	packer.start_file("GunFare.exe")
+	packer.write_file("game".to_utf8_buffer())
+	packer.close_file()
+	packer.close()
+	var size := FileAccess.open(path, FileAccess.READ).get_length()
+	var sha := FileAccess.get_sha256(path)
+	check(UpdateService.verify_package(path, size, sha, "GunFare.exe") == "", "a good package passes")
+	check(UpdateService.verify_package(path, size + 1, sha, "GunFare.exe").contains("not complete"), "a short download fails")
+	check(UpdateService.verify_package(path, size, "00" + sha.substr(2), "GunFare.exe").contains("damaged"), "a wrong checksum fails")
+	check(UpdateService.verify_package(path, -1, "", "GunFare.x86_64").contains("does not contain"), "a package without the executable fails")
+	var junk := FileAccess.open(path, FileAccess.WRITE)
+	junk.store_string("not a zip")
+	junk.close()
+	check(UpdateService.verify_package(path, -1, "", "GunFare.exe").contains("not a valid zip"), "a file that is not a zip fails")
+	DirAccess.remove_absolute(path)
+
+
+func _test_update_scripts_embedded() -> void:
+	for pair in [["res://tools/apply_update.ps1", UpdateService.WINDOWS_SCRIPT], ["res://tools/apply_update.sh", UpdateService.UNIX_SCRIPT]]:
+		var text := FileAccess.get_file_as_string(pair[0]).replace("\r\n", "\n").strip_edges()
+		check(text != "" and text == str(pair[1]).strip_edges(), "the game embeds the same text as " + pair[0])
+
+
+func _test_safe_file() -> void:
+	var path := "user://test_safe.json"
+	SafeFile.remove(path)
+	check(SafeFile.write_text(path, "{\"a\": 1}") == OK, "the first safe write works")
+	check(SafeFile.write_text(path, "{\"a\": 2}") == OK, "the second safe write works")
+	check(SafeFile.read_text(path, SafeFile.is_json_object) == "{\"a\": 2}", "the read gives the last text")
+	var broken := FileAccess.open(path, FileAccess.WRITE)
+	broken.store_string("{\"a\": ")
+	broken.close()
+	check(SafeFile.read_text(path, SafeFile.is_json_object) == "{\"a\": 1}", "a damaged file falls back to the backup")
+	SafeFile.remove(path)
+	check(SafeFile.read_text(path, SafeFile.is_json_object) == "", "no file gives an empty text")
+	# A damaged profile must not delete the progress.
+	Progression.xp = 5000
+	check(Progression.save_profile(), "the profile saves")
+	Progression.xp = 6000
+	check(Progression.save_profile(), "the profile saves again")
+	var cut := FileAccess.open(TEST_SAVE, FileAccess.WRITE)
+	cut.store_string("{")
+	cut.close()
+	Progression.load_profile()
+	check(Progression.xp == 5000, "a damaged profile loads the backup")
+	SafeFile.remove(TEST_SAVE)
 
 
 func _test_rank_table() -> void:

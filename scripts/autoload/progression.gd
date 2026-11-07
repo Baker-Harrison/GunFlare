@@ -302,19 +302,19 @@ func to_dict() -> Dictionary:
 
 
 func save_profile() -> bool:
-	var f := FileAccess.open(save_path, FileAccess.WRITE)
-	if f == null:
-		push_error("Could not save profile to %s: %s" % [save_path, error_string(FileAccess.get_open_error())])
+	var err := SafeFile.write_text(save_path, JSON.stringify(to_dict(), "\t"))
+	if err != OK:
+		push_error("Could not save profile to %s: %s" % [save_path, error_string(err)])
 		return false
-	f.store_string(JSON.stringify(to_dict(), "\t"))
 	return true
 
 
 func load_profile() -> void:
 	reset_profile()
-	if not FileAccess.file_exists(save_path):
+	var text := SafeFile.read_text(save_path, SafeFile.is_json_object)
+	if text == "":
 		return
-	var data = JSON.parse_string(FileAccess.get_file_as_string(save_path))
+	var data = JSON.parse_string(text)
 	if typeof(data) != TYPE_DICTIONARY:
 		push_warning("Profile at %s is unreadable; starting fresh." % save_path)
 		return

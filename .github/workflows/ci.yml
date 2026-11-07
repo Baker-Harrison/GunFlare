@@ -41,17 +41,67 @@ jobs:
       - name: Import the project
         run: godot --headless --path . --import --quit
 
-      - name: Check pull-request tools
+      - name: Check pull-request and update tools
         run: |
           python tools/check_pr.py --self-test
+          python tools/run_godot.py --self-test
           python tools/check_update_scripts.py
+          python tools/test_update_scripts.py --require-pwsh
+
+      - name: Load every script
+        run: python tools/run_godot.py --timeout 300 -- godot --headless --path . --script res://tests/load_all_scripts.gd
 
       - name: Run progression tests
-        run: godot --headless --path . res://tests/test_progression.tscn -- --no-update
+        run: python tools/run_godot.py --timeout 300 -- godot --headless --path . res://tests/test_progression.tscn -- --no-update
 
       - name: Run a short match test
         timeout-minutes: 4
-        run: godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20
+        run: python tools/run_godot.py --timeout 220 -- godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20
+
+  export:
+    name: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            curl unzip zip ca-certificates \
+            libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 \
+            libgl1 libfontconfig1 libxext6 libxrender1
+
+      - name: Cache the export templates
+        id: templates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates/4.7.1.stable
+          key: godot-export-templates-4.7.1-stable
+
+      - name: Install Godot 4.7.1
+        run: |
+          curl -fsSL -o /tmp/godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v4.7.1-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          godot --version
+
+      - name: Install the export templates
+        if: steps.templates.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o /tmp/templates.tpz \
+            https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.1.stable"
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates/* "$HOME/.local/share/godot/export_templates/4.7.1.stable/"
+
+      - name: Export Windows, macOS, and Linux
+        run: |
+          godot --headless --path . --import --quit
+          sh tools/export_all.sh
 
   pull-request:
     name: pull-request

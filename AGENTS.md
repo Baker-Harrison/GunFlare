@@ -61,3 +61,21 @@ Run the match test for 20 seconds:
 Run the pull-request text check:
 
 `python tools/check_pr.py --self-test`
+
+Run each Godot command through `tools/run_godot.py`. Godot can print a script error and exit with code 0. The wrapper makes that run fail:
+
+`python tools/run_godot.py -- godot --headless --path . --script res://tests/load_all_scripts.gd`
+
+Run the install script test:
+
+`python tools/test_update_scripts.py`
+
+If you change `tools/apply_update.ps1` or `tools/apply_update.sh`, copy the change into the game:
+
+`python tools/check_update_scripts.py --fix`
+
+CI exports the three packages for each pull request with `tools/export_all.sh`. Thus an export error shows before the merge.
+
+## Save files
+
+Write a player file with `SafeFile.write_text`. Do not open a save file with `FileAccess.WRITE` directly. A crash during a direct write can delete the progress.

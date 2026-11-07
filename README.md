@@ -64,7 +64,13 @@ blender -b -P tools/blender/build_characters.py
 
 ## Updates
 
-A release build checks GitHub for a newer version when the game starts. Choose **Install Update** on the main menu. The game downloads the package, closes, installs the files, and starts again. A source build can show that a version is available. Install the package only from a release build.
+Extract the zip file to a folder before you start the game, for example `Documents\GunFare`. If you start the game from inside the zip file, Windows runs it from a temporary folder. Then an update installs into `%LOCALAPPDATA%\Programs\GunFare`, and the main menu shows that folder.
+
+A release build checks GitHub for a newer version when the game starts. It checks again every 5 minutes and when the window gets the focus. A new version shows on the main menu without a restart.
+
+Choose **Install Update** on the main menu. The game downloads the package and examines the size and the SHA-256 checksum. Then the game closes, installs the files, and starts again. If a step fails, the install script puts the old files back and starts the old version. The main menu then shows the reason.
+
+A source build can show that a version is available. Install the package only from a release build.
 
 ## Contribute
 
