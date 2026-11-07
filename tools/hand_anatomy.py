@@ -455,9 +455,10 @@ class Arm:
         hem = 0.0012 * np.exp(-((h - 0.002) / 0.003) ** 2)
         r = r_out * (1.0 + 0.07 * np.cos(2 * phi)) + folds + band + hem
         outer = _tube(rad - r, np.abs(h - L * 0.5) - L * 0.5)
-        # Open at the wrist end: subtract an inner tube that runs out past it.
-        inner = _tube(rad - (r - 0.004), np.abs(h - (L + 0.1) * 0.5) - (L + 0.3) * 0.5)
-        return np.maximum(outer, -inner)
+        # Opening at the wrist end, 22 mm deep, so the glove cuff goes into
+        # the sleeve. The walls stay thick enough for a clean mesh.
+        hole = _tube(rad - (r - 0.006), np.abs(h + 0.039) - 0.061)
+        return np.maximum(outer, -hole)
 
     def glove_bounds(self, pad=0.006):
         lo = np.full(3, np.inf)
