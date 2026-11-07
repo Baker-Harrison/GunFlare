@@ -35,15 +35,14 @@ static func weapon_material(camo_id: String) -> Material:
 	m.shader = shader()
 	m.set_shader_parameter("pattern", d["pattern"])
 	for k in ["c0", "c1", "c2", "c3"]:
-		var c: Color = d[k]
-		m.set_shader_parameter(k, Vector3(c.r, c.g, c.b))
+		m.set_shader_parameter(k, d[k])
 	m.set_shader_parameter("scale", d["scale"])
 	m.set_shader_parameter("metallic_value", 0.35)
 	m.set_shader_parameter("roughness_value", 0.55)
 	m.set_shader_parameter("wear", 0.3)
 	if d.has("emission"):
 		var e: Color = d["emission"]
-		m.set_shader_parameter("emission_color", Vector3(e.r, e.g, e.b))
+		m.set_shader_parameter("emission_color", e)
 	_cache[camo_id] = m
 	return m
 
@@ -55,12 +54,12 @@ static func fabric_material(base: Color, secondary: Color, style: int) -> Materi
 	var m := ShaderMaterial.new()
 	m.shader = shader()
 	m.set_shader_parameter("pattern", 0 if style == 0 else 1)
-	m.set_shader_parameter("c0", Vector3(base.r, base.g, base.b))
+	m.set_shader_parameter("c0", base)
 	var dark := base.darkened(0.35)
-	m.set_shader_parameter("c1", Vector3(dark.r, dark.g, dark.b))
-	m.set_shader_parameter("c2", Vector3(secondary.r, secondary.g, secondary.b))
+	m.set_shader_parameter("c1", dark)
+	m.set_shader_parameter("c2", secondary)
 	var darker := base.darkened(0.6)
-	m.set_shader_parameter("c3", Vector3(darker.r, darker.g, darker.b))
+	m.set_shader_parameter("c3", darker)
 	m.set_shader_parameter("scale", 4.0)
 	m.set_shader_parameter("metallic_value", 0.0)
 	m.set_shader_parameter("roughness_value", 0.92)

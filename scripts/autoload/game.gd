@@ -10,7 +10,25 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() >= 1 and args[0] == "--match":
 		var cfg := {"map": args[1] if args.size() > 1 else "dustline", "mode": args[2] if args.size() > 2 else "tdm", "bots": 11}
+		if args.has("--autoplay"):
+			cfg["autoplay"] = true
 		start_match.call_deferred(cfg)
+		var shot := args.find("--shots")
+		if shot >= 0:
+			_capture_shots.call_deferred(args[shot + 1], int(args[shot + 2]) if args.size() > shot + 2 else 4)
+
+
+## Dev tool: saves a few screenshots during a match, then quits.
+func _capture_shots(dir: String, count: int) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	await get_tree().create_timer(6.0).timeout
+	for i in count:
+		await get_tree().create_timer(2.5).timeout
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		img.save_png(dir.path_join("shot_%d.png" % i))
+		print("[shots] saved ", i)
+	get_tree().quit()
 
 
 func start_match(config: Dictionary) -> void:

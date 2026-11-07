@@ -73,7 +73,7 @@ func apply() -> void:
 		if idx >= 0:
 			var key: String = {"Master": "master_volume", "SFX": "sfx_volume", "Music": "music_volume"}[bus_name]
 			AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(float(values[key]), 0.0001)))
-	if DisplayServer.get_name() != "headless":
+	if DisplayServer.get_name() != "headless" and not OS.get_cmdline_user_args().has("--shots"):
 		var mode := DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN if values["fullscreen"] else DisplayServer.WINDOW_MODE_WINDOWED
 		if DisplayServer.window_get_mode() != mode:
 			DisplayServer.window_set_mode(mode)

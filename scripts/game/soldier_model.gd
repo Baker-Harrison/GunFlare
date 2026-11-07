@@ -300,25 +300,25 @@ func _process(delta: float) -> void:
 		var s := 1.0 if i == 0 else -1.0
 		var leg := swing * s * dir_sign
 		var hip_x := leg
-		var knee_x := maxf(0.0, -sin(_phase + (0.0 if i == 0 else PI))) * 0.9 * amt
+		var knee_x := -maxf(0.0, -sin(_phase + (0.0 if i == 0 else PI))) * 0.9 * amt
 		# Crouch: thighs forward, shins back.
-		hip_x = lerpf(hip_x, -1.25 + leg * 0.3, _crouch)
-		knee_x = lerpf(knee_x, 1.9, _crouch)
+		hip_x = lerpf(hip_x, 1.25 + leg * 0.3, _crouch)
+		knee_x = lerpf(knee_x, -1.9, _crouch)
 		if not on_floor:
-			hip_x = -0.5 if i == 0 else 0.1
-			knee_x = 0.8 if i == 0 else 0.3
+			hip_x = 0.5 if i == 0 else -0.1
+			knee_x = -0.8 if i == 0 else -0.3
 		hip_x = lerpf(hip_x, sin(_phase) * 0.15 * s, _prone)
-		knee_x = lerpf(knee_x, 0.15, _prone)
+		knee_x = lerpf(knee_x, -0.15, _prone)
 		hips[i].rotation = Vector3(hip_x, 0.0, s * -0.04 * _crouch)
 		knees[i].rotation = Vector3(knee_x, 0.0, 0.0)
 
 	# Arms hold the weapon: right on the grip, left on the handguard.
 	var sprint_arm := 1.0 if soldier.sprinting else 0.0
 	var melee_swing := sin(_melee_t * PI) * 1.2
-	var right_up := Vector3(-1.05 + sprint_arm * 0.5, 0.25, 0.25)
-	var right_el := Vector3(-0.95, 0.0, 0.0)
-	var left_up := Vector3(-1.35 + sprint_arm * 0.4 - melee_swing * 0.5, -0.45, -0.1)
-	var left_el := Vector3(-0.35, 0.0, 0.0)
+	var right_up := Vector3(1.05 - sprint_arm * 0.5, -0.25, 0.25)
+	var right_el := Vector3(0.95, 0.0, 0.0)
+	var left_up := Vector3(1.35 - sprint_arm * 0.4 + melee_swing * 0.5, 0.45, -0.1)
+	var left_el := Vector3(0.35, 0.0, 0.0)
 	if shoulders.size() == 2:
 		shoulders[1].rotation = right_up
 		elbows[1].rotation = right_el

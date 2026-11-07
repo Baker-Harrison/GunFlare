@@ -5,8 +5,8 @@ extends Node3D
 ## ADS alignment, recoil, reload, swap, melee and equipment throws.
 
 const LAYER := 2
-const HIP_OFFSET := Vector3(0.13, -0.15, -0.28)
-const ADS_DISTANCE := 0.16
+const HIP_OFFSET := Vector3(0.15, -0.155, -0.36)
+const ADS_DISTANCE := 0.26
 
 var soldier: Soldier
 var gun: Node3D
@@ -104,13 +104,13 @@ func _build_arms() -> void:
 	glove.albedo_color = f["gloves"]
 	glove.roughness = 0.7
 	# Right hand on the grip, forearm running back and down out of view.
-	_right_hand = _arm_piece(arms, Vector3(0.045, 0.07, 0.09), Vector3(0.0, -0.02, 0.03), glove)
-	var r_fore := _arm_capsule(arms, 0.04, 0.34, Vector3(0.035, -0.08, 0.2), Vector3(-1.1, 0.25, 0.0), sleeve)
+	_right_hand = _arm_piece(arms, Vector3(0.038, 0.06, 0.08), Vector3(0.0, -0.025, 0.035), glove)
+	var r_fore := _arm_capsule(arms, 0.03, 0.3, Vector3(0.03, -0.09, 0.19), Vector3(-1.15, 0.2, 0.0), sleeve)
 	r_fore.name = "RightForearm"
 	var lh := gun.find_child("LeftHand", true, false) as Node3D
 	var lpos := lh.position if lh else Vector3(0, 0.03, -0.25)
-	_left_hand = _arm_piece(arms, Vector3(0.05, 0.06, 0.1), lpos + Vector3(-0.01, -0.03, 0), glove)
-	_arm_capsule(arms, 0.04, 0.38, lpos + Vector3(-0.1, -0.1, 0.16), Vector3(-1.0, -0.6, 0.3), sleeve).name = "LeftForearm"
+	_left_hand = _arm_piece(arms, Vector3(0.042, 0.05, 0.09), lpos + Vector3(-0.012, -0.03, 0), glove)
+	_arm_capsule(arms, 0.03, 0.34, lpos + Vector3(-0.09, -0.1, 0.15), Vector3(-1.05, -0.55, 0.3), sleeve).name = "LeftForearm"
 
 
 func _arm_piece(parent: Node3D, size: Vector3, pos: Vector3, m: Material) -> MeshInstance3D:

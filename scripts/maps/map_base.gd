@@ -82,7 +82,8 @@ func setup_environment(preset: String) -> void:
 	env.ssao_radius = 1.2
 	env.ssao_intensity = 1.6
 	env.fog_enabled = true
-	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
+	env.fog_sky_affect = 0.25
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.08
 	env.adjustment_saturation = 1.0
