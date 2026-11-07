@@ -658,7 +658,7 @@ FAST = os.environ.get("GUNFARE_ARMS_FAST") == "1"
 GLOVE_H = 0.0006 if FAST else 0.00045  # detail mesh (normal map source)
 SLEEVE_H = 0.0011
 GLOVE_LOW_H = 0.00125  # game mesh, before decimation
-SLEEVE_LOW_H = 0.0025
+SLEEVE_LOW_H = 0.0016
 GLOVE_TRIS = 32000
 SLEEVE_TRIS = 8000
 GLOVE_COLOURS = {
