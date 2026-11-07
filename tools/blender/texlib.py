@@ -370,8 +370,8 @@ def layers(g, p, masks, dust_on=True):
         weave = g.mul(g.add(g.wave(5200.0, "X", o), g.wave(5200.0, "Z", o)), 0.5)
         rib = g.wave(900.0, "Y", o)
         soft = g.noise(30.0, 3.0, 0.5, o)
-        dirt = g.mul(g.smooth(cavity, 0.2, 0.8), 0.55)
-        hi = g.mul(g.smooth(convex, 0.4, 0.9), 0.22 * wear_amt)
+        dirt = g.mul(g.smooth(cavity, 0.35, 0.9), 0.22)
+        hi = g.mul(g.smooth(convex, 0.5, 0.95), 0.08 * wear_amt)
 
         def tone(c, var):
             col = g.mixc(g.mul(g.sub(soft, 0.5), var), c, g.hsv(c, v=1.25))
