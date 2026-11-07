@@ -37,12 +37,12 @@ func _process(delta: float) -> void:
 		print("Match started: ", m.map.display_name, " / ", m.mode.display_name, "  soldiers=", m.soldiers.size())
 	_t += delta
 	if _t >= _duration or m.ended:
-		_report(m)
+		var code := _report(m)
 		set_process(false)
-		get_tree().quit(0)
+		get_tree().quit(code)
 
 
-func _report(m: Match) -> void:
+func _report(m: Match) -> int:
 	var total_kills := 0
 	var moved := 0
 	for s in m.soldiers:
@@ -57,5 +57,7 @@ func _report(m: Match) -> void:
 		if stt["count"] > 0:
 			done += 1
 	print("Challenges with progress: ", done)
-	print("SMOKE ", "PASS" if total_kills > 0 else "FAIL (no kills)")
+	var ok := total_kills > 0
+	print("SMOKE ", "PASS" if ok else "FAIL (no kills)")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://smoke_profile.json"))
+	return 0 if ok else 1

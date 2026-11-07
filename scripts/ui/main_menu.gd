@@ -5,6 +5,7 @@ extends Control
 var _content: Control
 var _showcase: WeaponShowcase
 var _card: VBoxContainer
+var _on_home := false
 var _cfg := {"mode": "tdm", "map": "dustline", "bots": 11, "difficulty": 1, "class": {"source": "preset", "index": 0}}
 
 
@@ -29,6 +30,9 @@ func _ready() -> void:
 	var sub := UiKit.label("MULTIPLAYER  ·  OFFLINE WITH BOTS", 18, UiKit.ACCENT, true)
 	sub.position = Vector2(86, 160)
 	add_child(sub)
+	var ver := UiKit.label("VERSION " + UpdateService.current_version, 14, UiKit.MUTED, true)
+	ver.position = Vector2(86, 186)
+	add_child(ver)
 	_card = UiKit.vbox(4)
 	_card.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_card.position = Vector2(-520, 60)
@@ -47,6 +51,8 @@ func _ready() -> void:
 	_showcase.position = Vector2(-980, -240)
 	_showcase.size = Vector2(900, 520)
 	add_child(_showcase)
+	if not UpdateService.state_changed.is_connected(_on_update_state):
+		UpdateService.state_changed.connect(_on_update_state)
 	_home()
 	Sfx.play_music("menu", -8.0)
 
@@ -73,7 +79,57 @@ func _update_card() -> void:
 	_card.add_child(UiKit.label("K/D %.2f   ·   Wins %d   ·   Kills %d" % [kd, s.get("wins", 0), s.get("kills", 0)], 14, UiKit.MUTED))
 
 
+func _on_update_state() -> void:
+	if _on_home:
+		_show_update_banner()
+
+
+func _show_update_banner() -> void:
+	var old := _content.get_node_or_null("UpdateBanner")
+	if old:
+		old.free()
+	var box = _update_banner()
+	if box == null:
+		return
+	_content.add_child(box)
+	_content.move_child(box, 0)
+
+
+func _update_banner():
+	var lines: PackedStringArray = []
+	if UpdateService.install_error != "":
+		lines.append("The last update failed. " + UpdateService.install_error)
+	if UpdateService.status == "available":
+		lines.append(UpdateService.message)
+	elif UpdateService.status == "downloading":
+		lines.append(UpdateService.message)
+	elif UpdateService.status == "error" and UpdateService.message != "":
+		lines.append(UpdateService.message)
+	if lines.is_empty():
+		return null
+	var box := UiKit.vbox(6)
+	box.name = "UpdateBanner"
+	for line in lines:
+		var label := UiKit.label(line, 16, UiKit.ACCENT, true)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.custom_minimum_size = Vector2(420, 0)
+		box.add_child(label)
+	if UpdateService.status == "downloading":
+		var bar := ProgressBar.new()
+		bar.max_value = 1.0
+		bar.value = UpdateService.progress
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(420, 12)
+		box.add_child(bar)
+	elif UpdateService.can_install():
+		box.add_child(UiKit.button("INSTALL UPDATE", func() -> void: UpdateService.install(), 22, 420))
+	elif UpdateService.status == "error":
+		box.add_child(UiKit.button("TRY AGAIN", func() -> void: UpdateService._check(), 22, 420))
+	return box
+
+
 func _home() -> void:
+	_on_home = true
 	UiKit.clear(_content)
 	_showcase.visible = true
 	var cls: Dictionary = ContentDB.PRESET_CLASSES[0]
@@ -83,6 +139,7 @@ func _home() -> void:
 	elif sel.get("source") == "preset":
 		cls = ContentDB.PRESET_CLASSES[clampi(sel.get("index", 0), 0, ContentDB.PRESET_CLASSES.size() - 1)]
 	_showcase.show_weapon(cls["primary"], cls.get("primary_attachments", []), cls.get("primary_camo", ""))
+	_show_update_banner()
 	_content.add_child(UiKit.button("PLAY", _play, 30, 420))
 	_content.add_child(UiKit.button("CREATE-A-CLASS", func() -> void: _open(CreateAClass.new()), 30, 420))
 	_content.add_child(UiKit.button("BARRACKS", func() -> void: _open(Barracks.new()), 30, 420))
@@ -95,6 +152,7 @@ func _home() -> void:
 
 
 func _open(screen: Control) -> void:
+	_on_home = false
 	UiKit.clear(_content)
 	_showcase.visible = false
 	_content.add_child(screen)
@@ -105,6 +163,7 @@ func _open(screen: Control) -> void:
 
 
 func _options() -> void:
+	_on_home = false
 	UiKit.clear(_content)
 	_showcase.visible = false
 	_content.add_child(UiKit.label("OPTIONS", 40, UiKit.TEXT, true))
@@ -115,6 +174,7 @@ func _options() -> void:
 
 
 func _play() -> void:
+	_on_home = false
 	UiKit.clear(_content)
 	_showcase.visible = false
 	_content.add_child(UiKit.label("MATCH SETUP", 40, UiKit.TEXT, true))

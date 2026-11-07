@@ -22,6 +22,7 @@ func _ready() -> void:
 	_run(_test_streak_selection)
 	_run(_test_prestige)
 	_run(_test_save_load)
+	_run(_test_update_version)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_SAVE))
 	print("%d checks, %d failures" % [_checks, _failures.size()])
 	get_tree().quit(1 if _failures.size() > 0 else 0)
@@ -44,6 +45,15 @@ func kill(weapon: String, headshot := false, perks: Array = [], extra: Dictionar
 	var info := {"weapon": weapon, "headshot": headshot, "perks": perks, "attachment_count": 0, "distance": 20.0}
 	info.merge(extra, true)
 	GameEvents.report("kill", info)
+
+
+func _test_update_version() -> void:
+	check(UpdateService.is_newer("0.2.0", "0.1.0"), "0.2.0 is newer than 0.1.0")
+	check(not UpdateService.is_newer("0.1.0", "0.1.0"), "the same version is not newer")
+	check(not UpdateService.is_newer("0.1.0", "0.2.0"), "an older version is not newer")
+	check(UpdateService.is_newer("v1.0.0", "0.9.9"), "a v prefix is accepted")
+	check(not UpdateService.is_newer("1.2.0", "1.2"), "1.2.0 matches 1.2")
+	check(UpdateService.is_newer("1.2.1", "1.2"), "1.2.1 is newer than 1.2")
 
 
 func _test_rank_table() -> void:

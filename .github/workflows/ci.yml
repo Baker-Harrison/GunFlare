@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            curl unzip ca-certificates \
+            libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 \
+            libgl1 libfontconfig1 libxext6 libxrender1
+
+      - name: Install Godot 4.7.1
+        run: |
+          curl -fsSL -o /tmp/godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v4.7.1-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          godot --version
+
+      - name: Import the project
+        run: godot --headless --path . --import --quit
+
+      - name: Check pull-request tools
+        run: |
+          python tools/check_pr.py --self-test
+          python tools/check_update_scripts.py
+
+      - name: Run progression tests
+        run: godot --headless --path . res://tests/test_progression.tscn -- --no-update
+
+      - name: Run a short match test
+        timeout-minutes: 4
+        run: godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20
+
+  pull-request:
+    name: pull-request
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the pull request text
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch origin "$BASE_REF"
+          git diff --name-only "origin/$BASE_REF...HEAD" > /tmp/changed-files.txt
+          python tools/check_pr.py --event-file "$GITHUB_EVENT_PATH" --files-file /tmp/changed-files.txt

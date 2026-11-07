@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag against the project version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          grep -q "config/version=\"${tag}\"" project.godot
+          echo "Release version ${tag}"
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            curl unzip zip ca-certificates \
+            libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 \
+            libgl1 libfontconfig1 libxext6 libxrender1
+
+      - name: Install Godot 4.7.1 and export templates
+        run: |
+          curl -fsSL -o /tmp/godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v4.7.1-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          curl -fsSL -o /tmp/templates.tpz \
+            https://github.com/godotengine/godot/releases/download/4.7.1-stable/Godot_v4.7.1-stable_export_templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.1.stable"
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates/* "$HOME/.local/share/godot/export_templates/4.7.1.stable/"
+          godot --version
+
+      - name: Import and test
+        run: |
+          godot --headless --path . --import --quit
+          python tools/check_pr.py --self-test
+          python tools/check_update_scripts.py
+          godot --headless --path . res://tests/test_progression.tscn -- --no-update
+          godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20
+
+      - name: Export Windows and Linux
+        run: |
+          mkdir -p build/windows build/linux
+          godot --headless --path . --export-release "Windows" build/windows/GunFare.exe
+          godot --headless --path . --export-release "Linux" build/linux/GunFare.x86_64
+          test -f build/windows/GunFare.exe
+          test -f build/linux/GunFare.x86_64
+          (cd build/windows && zip -r ../../GunFare-windows.zip .)
+          (cd build/linux && zip -r ../../GunFare-linux.zip .)
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release create "$tag" GunFare-windows.zip GunFare-linux.zip \
+            --title "$tag" \
+            --notes "GunFare ${tag#v}. A release build can install this package from the main menu."

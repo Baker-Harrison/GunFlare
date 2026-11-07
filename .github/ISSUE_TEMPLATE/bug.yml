@@ -1,0 +1,37 @@
+name: Defect
+description: Report a defect in the game.
+title: "[Defect] "
+labels: ["defect"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Use ASD-STE100. Use a maximum of 25 words in each sentence. Do not use a contraction.
+      placeholder: State the defect.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: Write one instruction in each sentence.
+      placeholder: |
+        1. Do this step.
+        2. Compare the result with the expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      placeholder: State the correct result.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      placeholder: State the result that you see.
+    validations:
+      required: true

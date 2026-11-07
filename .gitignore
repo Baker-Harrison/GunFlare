@@ -2,7 +2,9 @@
 .godot/
 /android/
 *.translation
-export_presets.cfg
+build/
+__pycache__/
+*.pyc
 
 # Local capture. Too large for GitHub.
 /game-demo.mp4

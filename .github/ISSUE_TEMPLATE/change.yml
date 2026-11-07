@@ -1,0 +1,21 @@
+name: Change request
+description: Request a change to the game.
+title: "[Change] "
+labels: ["change"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Use ASD-STE100. Use a maximum of 25 words in each sentence. Do not use a contraction.
+      placeholder: State the change and the reason.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Add a screenshot, a diagram, or a table when the request needs it.
+      placeholder: Not applicable.
+    validations:
+      required: false

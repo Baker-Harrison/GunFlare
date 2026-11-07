@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contribution rules
+    url: https://github.com/Baker-Harrison/GunFlare/blob/main/CONTRIBUTING.md
+    about: Read the rules before you open a pull request.

@@ -62,6 +62,14 @@ blender -b -P tools/blender/build_props.py
 blender -b -P tools/blender/build_characters.py
 ```
 
+## Updates
+
+A release build checks GitHub for a newer version when the game starts. Choose **Install Update** on the main menu. The game downloads the package, closes, installs the files, and starts again. A source build can show that a version is available. Install the package only from a release build.
+
+## Contribute
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md). Do not push to `main`. Open a pull request. Write the pull request in ASD-STE100. Add a screenshot, a diagram, or a table when the change needs it.
+
 ## Tests
 
 ```

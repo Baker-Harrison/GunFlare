@@ -8,6 +8,7 @@ config_version=5
 
 config/name="GunFare"
 config/description="Arcade multiplayer FPS with rank, unlock and Ascension progression."
+config/version="0.1.0"
 run/main_scene="res://scenes/boot.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
@@ -21,6 +22,7 @@ ChallengeTracker="*res://scripts/autoload/challenge_tracker.gd"
 Sfx="*res://scripts/autoload/sfx.gd"
 Fx="*res://scripts/autoload/fx.gd"
 Game="*res://scripts/autoload/game.gd"
+UpdateService="*res://scripts/autoload/update_service.gd"
 
 [display]
 
