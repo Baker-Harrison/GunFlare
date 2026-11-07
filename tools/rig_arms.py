@@ -30,7 +30,10 @@ import math
 import os
 import sys
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:  # --check needs only json; rigging needs numpy.
+    np = None
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CHARS = os.path.join(ROOT, "assets", "characters")
@@ -46,9 +49,9 @@ FINGERS = [  # name, proximal, middle, distal lengths, radius
     ("Pinky", 0.036, 0.021, 0.019, 0.0086),
 ]
 R18 = math.radians(18)
-GRIP_TOP = np.array([0.0, -0.02, 0.0])
-GRIP_AXIS = np.array([0.0, -math.sin(R18), -math.cos(R18)])
-LEFT_REF = np.array([0.0, 0.25, 0.04])
+GRIP_TOP = (0.0, -0.02, 0.0)
+GRIP_AXIS = (0.0, -math.sin(R18), -math.cos(R18))
+LEFT_REF = (0.0, 0.25, 0.04)
 
 
 def _n(v):
@@ -57,6 +60,7 @@ def _n(v):
 
 
 def hand_spec(prefix):
+    GRIP_TOP, GRIP_AXIS, LEFT_REF = (np.array(v) for v in (globals()["GRIP_TOP"], globals()["GRIP_AXIS"], globals()["LEFT_REF"]))
     if prefix == "R":
         return dict(centre=GRIP_TOP + GRIP_AXIS * 0.045, axis=-GRIP_AXIS, side=(0.55, -1.0, 0.0), radius=0.019,
                     handed=1, arc=1.35, index_straight=((0, 1, 0.05), (-1, 0, 0), (0, 0, -1)), thumb=("wrap", 0.75),
@@ -429,6 +433,8 @@ def main():
         for f in bad:
             print("no rig:", os.path.relpath(f, ROOT))
         sys.exit(1 if bad else 0)
+    if np is None:
+        sys.exit("rig_arms.py needs numpy to rig the arms: pip install numpy")
     for f in files:
         rig(f)
 
