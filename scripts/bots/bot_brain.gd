@@ -79,7 +79,12 @@ func _on_damaged(info: DamageInfo) -> void:
 
 func _in_view_cone(o: Soldier) -> bool:
 	var to := (o.global_position - soldier.global_position).normalized()
-	return (-soldier.global_basis.z).dot(to) > cos(deg_to_rad(FOV_DEG[difficulty] * 0.5))
+	return (-soldier.global_basis.z).dot(to) > _fov_cos()
+
+
+## Cosine of half the view cone, plus an optional margin in degrees.
+func _fov_cos(margin_deg := 0.0) -> float:
+	return cos(deg_to_rad(FOV_DEG[difficulty] * 0.5 + margin_deg))
 
 
 func _now() -> float:
@@ -141,7 +146,8 @@ func _perceive() -> void:
 	var fwd := -soldier.global_basis.z
 	var now := _now()
 	var view_range: float = VIEW_RANGE[difficulty]
-	var fov_cos := cos(deg_to_rad(FOV_DEG[difficulty] * 0.5))
+	var fov_cos := _fov_cos()
+	var track_cos := _fov_cos(25.0)
 	for o: Soldier in soldier.get_tree().get_nodes_in_group("soldiers"):
 		if o == soldier or not o.alive or not soldier.is_enemy(o):
 			continue
@@ -154,7 +160,7 @@ func _perceive() -> void:
 		var in_fov := fwd.dot(to.normalized()) > fov_cos
 		# A bot keeps track of its current target a little past the edge of
 		# its view, but it cannot see behind itself.
-		var tracking := o == target and fwd.dot(to.normalized()) > cos(deg_to_rad(FOV_DEG[difficulty] * 0.5 + 25.0))
+		var tracking := o == target and fwd.dot(to.normalized()) > track_cos
 		if not in_fov and not heard and not tracking:
 			continue
 		var aim_pt := o.center_mass()
