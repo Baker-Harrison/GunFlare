@@ -10,7 +10,25 @@ PAIRS = (
 )
 
 
+def fix() -> int:
+    """Copy the install scripts into update_service.gd."""
+    path = ROOT / "scripts/autoload/update_service.gd"
+    game = path.read_text(encoding="utf-8")
+    for relative, marker in PAIRS:
+        script = _norm((ROOT / relative).read_text(encoding="utf-8"))
+        embedded = _embedded(game, marker)
+        if embedded is None:
+            print(f"update_service.gd does not embed {relative}")
+            return 1
+        game = game.replace('"""' + embedded + '"""', '"""' + script + '"""', 1)
+    path.write_text(game, encoding="utf-8", newline="\n")
+    print("update_service.gd now embeds the install scripts")
+    return 0
+
+
 def main() -> int:
+    if "--fix" in sys.argv[1:]:
+        return fix()
     game = (ROOT / "scripts/autoload/update_service.gd").read_text(encoding="utf-8")
     failed = False
     for relative, marker in PAIRS:

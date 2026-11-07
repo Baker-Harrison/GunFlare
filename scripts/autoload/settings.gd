@@ -127,12 +127,15 @@ func save() -> void:
 		cfg.set_value("options", k, values[k])
 	for a: String in bindings:
 		cfg.set_value("bindings", a, bindings[a])
-	cfg.save(PATH)
+	var err := SafeFile.write_text(PATH, cfg.encode_to_text())
+	if err != OK:
+		push_error("Could not save settings to %s: %s" % [PATH, error_string(err)])
 
 
 func _load() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(PATH) != OK:
+	var text := SafeFile.read_text(PATH, func(t: String) -> bool: return ConfigFile.new().parse(t) == OK)
+	if text == "" or cfg.parse(text) != OK:
 		return
 	for k: String in values:
 		values[k] = cfg.get_value("options", k, values[k])

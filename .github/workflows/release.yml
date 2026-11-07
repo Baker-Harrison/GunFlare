@@ -7,8 +7,10 @@ on:
 permissions:
   contents: write
 
+# One release at a time, in merge order. Thus the newest merge is always the
+# latest release. A queued release that a newer merge replaces does not run.
 concurrency:
-  group: release-${{ github.sha }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -60,24 +62,13 @@ jobs:
           godot --headless --path . --import --quit
           python tools/check_pr.py --self-test
           python tools/check_update_scripts.py
-          godot --headless --path . res://tests/test_progression.tscn -- --no-update
-          godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20
+          python tools/test_update_scripts.py --require-pwsh
+          python tools/run_godot.py --timeout 300 -- godot --headless --path . --script res://tests/load_all_scripts.gd
+          python tools/run_godot.py --timeout 300 -- godot --headless --path . res://tests/test_progression.tscn -- --no-update
+          python tools/run_godot.py --timeout 220 -- godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20
 
       - name: Export Windows, macOS, and Linux
-        run: |
-          mkdir -p build/windows build/linux build/macos
-          godot --headless --path . --export-release "Windows" build/windows/GunFare.exe
-          godot --headless --path . --export-release "Linux" build/linux/GunFare.x86_64
-          godot --headless --path . --export-release "macOS" build/macos/GunFare.app
-          test -f build/windows/GunFare.exe
-          test -f build/linux/GunFare.x86_64
-          test -d build/macos/GunFare.app
-          (cd build/windows && zip -r ../../GunFare-windows.zip .)
-          (cd build/linux && zip -r ../../GunFare-linux.zip .)
-          (cd build/macos && zip -r -y ../../GunFare-macos.zip GunFare.app)
-          unzip -l GunFare-windows.zip | grep -q 'GunFare.exe'
-          unzip -l GunFare-linux.zip | grep -q 'GunFare.x86_64'
-          unzip -l GunFare-macos.zip | grep -q 'GunFare.app'
+        run: sh tools/export_all.sh
 
       - name: Publish the release
         env:
@@ -85,10 +76,16 @@ jobs:
         run: |
           version="${{ steps.version.outputs.version }}"
           tag="v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag exists. Replace its packages."
+            gh release upload "$tag" GunFare-windows.zip GunFare-linux.zip GunFare-macos.zip --clobber
+            exit 0
+          fi
           gh release create "$tag" \
             GunFare-windows.zip \
             GunFare-linux.zip \
             GunFare-macos.zip \
             --target "${GITHUB_SHA}" \
             --title "$tag" \
-            --notes "GunFare ${version} has Windows, macOS, and Linux packages. A release build can install this package from the main menu."
+            --latest \
+            --notes "GunFare ${version} has Windows, macOS, and Linux packages. Extract the zip file to a folder before you start the game. A release build can then install a newer package from the main menu."
