@@ -365,6 +365,8 @@ def layers(g, p, masks, dust_on=True):
         att = g.n.new("ShaderNodeAttribute")
         att.attribute_name = "Zone"
         w_fab, w_pad, w_cuff = g.sep(att.outputs["Color"])[1], g.sep(att.outputs["Color"])[2], att.outputs["Alpha"]
+        # Sharpen the blended weights into clean seam lines.
+        w_fab, w_pad, w_cuff = (g.smooth(w, 0.4, 0.6) for w in (w_fab, w_pad, w_cuff))
         grain = g.voronoi(1500.0, "F1", o)
         pores = g.voronoi(3200.0, "F1", o)
         weave = g.mul(g.add(g.wave(5200.0, "X", o), g.wave(5200.0, "Z", o)), 0.5)
@@ -385,7 +387,7 @@ def layers(g, p, masks, dust_on=True):
         col = g.mixc(w_fab, leather, fabric)
         col = g.mixc(w_pad, col, pad)
         col = g.mixc(w_cuff, col, cuff)
-        rough = g.mixf(w_fab, g.add(0.56, g.mul(g.sub(grain, 0.5), 0.12)), 0.8)
+        rough = g.mixf(w_fab, g.add(0.68, g.mul(g.sub(grain, 0.5), 0.12)), 0.82)
         rough = g.mixf(w_pad, rough, 0.42)
         rough = g.mixf(w_cuff, rough, 0.85)
         height = g.mixf(w_fab, g.add(g.mul(grain, 0.5), g.mul(pores, 0.2)), g.mul(weave, 0.6))
