@@ -390,8 +390,9 @@ class Arm:
                 kb = np.stack([fz["x"], fz["y"], fz["z"]], axis=1)
                 parts.append(Ell(c, kb, (rws[k] * 0.72, rts[k] * 0.42, rts[k] * 0.55), "%s%d" % (name, k), name, ZONE_FABRIC))
             self.fingers[name] = parts
-            if name != "Thumb":
-                # Moulded pad on the back of the proximal phalanx.
+            if False:
+                # Moulded pad on the back of the proximal phalanx (off: at
+                # this size it reads as painted stripes, not as armour).
                 fz = frames[0]
                 a = pts[0] + fz["y"] * fz["len"] * 0.28 - fz["z"] * rts[0] * 0.92
                 b = pts[0] + fz["y"] * fz["len"] * 0.7 - fz["z"] * rts[1] * 0.9
