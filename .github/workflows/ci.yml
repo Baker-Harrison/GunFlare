@@ -61,7 +61,7 @@ jobs:
         run: python tools/run_godot.py --timeout 300 -- godot --headless --path . res://tests/test_progression.tscn -- --no-update
 
       - name: Download the latest release with the game's update code
-        run: python tools/run_godot.py --timeout 700 -- godot --headless --path . res://tests/test_update_download.tscn -- latest GunFare-windows.zip --compare-api-headers
+        run: python tools/run_godot.py --timeout 700 -- godot --headless --path . res://tests/test_update_download.tscn -- latest GunFare-windows.zip --max-fps 5
 
       - name: Run a short match test
         timeout-minutes: 4

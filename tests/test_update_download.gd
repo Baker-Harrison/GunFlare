@@ -19,6 +19,11 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var tag := args[0] if args.size() > 0 and not args[0].begins_with("--") else "latest"
 	var asset := args[1] if args.size() > 1 and not args[1].begins_with("--") else "GunFare-linux.zip"
+	var fps_at := args.find("--max-fps")
+	if fps_at >= 0 and fps_at + 1 < args.size():
+		# Slow frames, as in a busy or background game window.
+		Engine.max_fps = int(args[fps_at + 1])
+		print("Frame rate limit: %d" % Engine.max_fps)
 	_run(tag, asset, args.has("--compare-api-headers"))
 
 
