@@ -3,11 +3,14 @@ extends Node
 ## - every weapon in ContentDB has a model with its markers and baked textures,
 ## - every attachment model loads,
 ## - each soldier has a skeleton with the 12 rig bones and a skinned mesh,
-## - each set of first-person arms has ArmR, ArmL and ArmLPistol.
+## - each set of first-person arms has ArmR, ArmL and ArmLPistol, each with a
+##   hand skeleton (tools/rig_arms.py) and a skinned mesh.
 ## Run: godot --headless --path . res://tests/test_models.tscn
 
 const BONES := ["Pelvis", "Torso", "Chest", "Head", "ShoulderL", "ElbowL", "ShoulderR", "ElbowR", "HipL", "KneeL", "HipR", "KneeR"]
 const MARKERS := ["Muzzle", "Mag", "ADS", "LeftHand", "Optic", "Underbarrel"]
+const ARM_BONES := ["Root", "Forearm", "Hand", "Thumb1", "Thumb2", "Thumb3", "Index1", "Index2", "Index3",
+	"Middle1", "Middle2", "Middle3", "Ring1", "Ring2", "Ring3", "Pinky1", "Pinky2", "Pinky3"]
 const ATTACHMENTS := ["reflex", "holo", "marksman_scope", "thermal", "suppressor", "underbarrel_gl", "underbarrel_shotgun", "grip", "pulse_tracker"]
 
 var _failed := 0
@@ -80,6 +83,25 @@ func _check_arms(path: String) -> void:
 	if not ResourceLoader.exists(path):
 		return
 	var inst := (load(path) as PackedScene).instantiate()
-	for n in ["ArmR", "ArmL", "ArmLPistol"]:
-		_expect(inst.find_child(n, true, false) != null, "%s has %s" % [path, n])
+	var prefixes := {"ArmR": "R", "ArmL": "L", "ArmLPistol": "P"}
+	for n: String in prefixes:
+		var group := inst.find_child(n, true, false) as Node3D
+		_expect(group != null, "%s has %s" % [path, n])
+		if group == null:
+			continue
+		# tools/rig_arms.py adds the hand skeleton that the viewmodel drives.
+		var prefix: String = prefixes[n]
+		var skels := group.find_children("*", "Skeleton3D", true, false)
+		_expect(skels.size() == 1, "%s %s has one skeleton" % [path, n])
+		if skels.size() == 1:
+			var sk := skels[0] as Skeleton3D
+			for b in ARM_BONES:
+				_expect(sk.find_bone("%s_%s" % [prefix, b]) >= 0, "%s %s has bone %s_%s" % [path, n, prefix, b])
+		var skinned := false
+		for mi: MeshInstance3D in group.find_children("*", "MeshInstance3D", true, false):
+			if mi.skin != null:
+				skinned = true
+		_expect(skinned, "%s %s has a skinned mesh" % [path, n])
+		var rig := Viewmodel.ArmRig.new()
+		_expect(rig.setup(group, prefix), "%s %s works with the viewmodel arm rig" % [path, n])
 	inst.free()
