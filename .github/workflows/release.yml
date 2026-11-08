@@ -89,3 +89,10 @@ jobs:
             --title "$tag" \
             --latest \
             --notes "GunFare ${version} has Windows, macOS, and Linux packages. Extract the zip file to a folder before you start the game. A release build can then install a newer package from the main menu."
+
+      - name: Download the published packages with the game's update code
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          for asset in GunFare-windows.zip GunFare-macos.zip GunFare-linux.zip; do
+            python tools/run_godot.py --timeout 700 -- godot --headless --path . res://tests/test_update_download.tscn -- "$tag" "$asset" --max-fps 5
+          done
