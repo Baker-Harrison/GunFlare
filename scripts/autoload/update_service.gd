@@ -406,11 +406,7 @@ func _ready() -> void:
 	_check_http.timeout = 20.0
 	add_child(_check_http)
 	_check_http.request_completed.connect(_on_check_done)
-	_download_http = HTTPRequest.new()
-	# The whole download can take minutes. _process stops a download that stalls.
-	_download_http.timeout = 0.0
-	_download_http.accept_gzip = false
-	_download_http.download_chunk_size = 262144
+	_download_http = new_download_request()
 	add_child(_download_http)
 	_download_http.request_completed.connect(_on_download_done)
 	_timer = Timer.new()
@@ -504,7 +500,7 @@ func install() -> void:
 	_part_path = ProjectSettings.globalize_path("%s/GunFare-%s.zip.part" % [UPDATE_DIR, remote_version])
 	_remove(_part_path)
 	_download_http.download_file = _part_path
-	var err := _download_http.request(_url, _headers())
+	var err := _download_http.request(_url, download_headers(current_version))
 	if err != OK:
 		_fail("The download did not start. Examine the network connection and try again.")
 		return
@@ -559,6 +555,34 @@ func game_dir() -> String:
 
 
 # --- Pure helpers (the tests call these) ---------------------------------------
+
+## The HTTP request that downloads a package. tests/test_update_download.gd
+## uses the same request, so CI downloads a real release the same way.
+static func new_download_request() -> HTTPRequest:
+	var http := HTTPRequest.new()
+	# The whole download can take minutes. _process stops a download that stalls.
+	http.timeout = 0.0
+	http.accept_gzip = false
+	http.download_chunk_size = 262144
+	return http
+
+
+## Headers for a request to the GitHub API (the version check).
+static func api_headers(version: String) -> PackedStringArray:
+	return PackedStringArray([
+		"User-Agent: GunFare/" + version,
+		"Accept: application/vnd.github+json",
+		"X-GitHub-Api-Version: 2022-11-28",
+	])
+
+
+## Headers for the package download.
+static func download_headers(version: String) -> PackedStringArray:
+	return PackedStringArray([
+		"User-Agent: GunFare/" + version,
+		"Accept: application/octet-stream",
+	])
+
 
 static func is_newer(remote: String, local: String) -> bool:
 	var remote_parts := _parts(remote)
@@ -769,11 +793,7 @@ func _fallback_dir() -> String:
 
 
 func _headers() -> PackedStringArray:
-	return PackedStringArray([
-		"User-Agent: GunFare/" + current_version,
-		"Accept: application/vnd.github+json",
-		"X-GitHub-Api-Version: 2022-11-28",
-	])
+	return api_headers(current_version)
 
 
 func _on_check_done(result: int, code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
