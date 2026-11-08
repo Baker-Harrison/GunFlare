@@ -15,6 +15,9 @@ const MAX_BYTES := 1024 * 1024 * 1024
 const CHECK_INTERVAL := 300.0
 const FOCUS_RECHECK_MS := 60000
 const STALL_SECONDS := 45.0
+## Automatic retries of a download that fails on the network, before the menu
+## shows an error.
+const DOWNLOAD_RETRIES := 2
 const UPDATE_DIR := "user://updates"
 const LOG_FILE := "user://updates/install.log"
 const WINDOWS_SCRIPT := r"""# GUNFARE_UPDATE_SCRIPT_WINDOWS
@@ -393,6 +396,7 @@ var _timer: Timer
 var _last_percent := -1
 var _stall_bytes := -1
 var _stall_time := 0.0
+var _retries_left := 0
 
 
 func _ready() -> void:
@@ -406,11 +410,7 @@ func _ready() -> void:
 	_check_http.timeout = 20.0
 	add_child(_check_http)
 	_check_http.request_completed.connect(_on_check_done)
-	_download_http = HTTPRequest.new()
-	# The whole download can take minutes. _process stops a download that stalls.
-	_download_http.timeout = 0.0
-	_download_http.accept_gzip = false
-	_download_http.download_chunk_size = 262144
+	_download_http = new_download_request()
 	add_child(_download_http)
 	_download_http.request_completed.connect(_on_download_done)
 	_timer = Timer.new()
@@ -493,6 +493,11 @@ func install() -> void:
 	if not can_install():
 		# The banner already shows the reason. A blocked install is not an error.
 		return
+	_retries_left = DOWNLOAD_RETRIES
+	_start_download()
+
+
+func _start_download() -> void:
 	status = "downloading"
 	progress = 0.0
 	_last_percent = -1
@@ -504,7 +509,7 @@ func install() -> void:
 	_part_path = ProjectSettings.globalize_path("%s/GunFare-%s.zip.part" % [UPDATE_DIR, remote_version])
 	_remove(_part_path)
 	_download_http.download_file = _part_path
-	var err := _download_http.request(_url, _headers())
+	var err := _download_http.request(_url, download_headers(current_version))
 	if err != OK:
 		_fail("The download did not start. Examine the network connection and try again.")
 		return
@@ -560,6 +565,38 @@ func game_dir() -> String:
 
 # --- Pure helpers (the tests call these) ---------------------------------------
 
+## The HTTP request that downloads a package. tests/test_update_download.gd
+## uses the same request, so CI downloads a real release the same way.
+static func new_download_request() -> HTTPRequest:
+	var http := HTTPRequest.new()
+	# The whole download can take minutes. _process stops a download that stalls.
+	http.timeout = 0.0
+	http.accept_gzip = false
+	# A thread reads the body. Without it, the download reads one chunk per
+	# frame, so a slow or background window starves the connection and the
+	# server closes it.
+	http.use_threads = true
+	http.download_chunk_size = 1048576
+	return http
+
+
+## Headers for a request to the GitHub API (the version check).
+static func api_headers(version: String) -> PackedStringArray:
+	return PackedStringArray([
+		"User-Agent: GunFare/" + version,
+		"Accept: application/vnd.github+json",
+		"X-GitHub-Api-Version: 2022-11-28",
+	])
+
+
+## Headers for the package download.
+static func download_headers(version: String) -> PackedStringArray:
+	return PackedStringArray([
+		"User-Agent: GunFare/" + version,
+		"Accept: application/octet-stream",
+	])
+
+
 static func is_newer(remote: String, local: String) -> bool:
 	var remote_parts := _parts(remote)
 	var local_parts := _parts(local)
@@ -614,6 +651,35 @@ static func pick_asset(release: Dictionary, asset_name: String) -> Dictionary:
 		var size := int(size_value) if typeof(size_value) in [TYPE_INT, TYPE_FLOAT] else -1
 		return {"version": version, "url": url, "size": size, "digest": digest}
 	return {}
+
+
+## A short reason for an HTTPRequest result, for the menu and the log.
+static func result_text(result: int, code: int) -> String:
+	match result:
+		HTTPRequest.RESULT_SUCCESS:
+			return "The server returned HTTP %d." % code
+		HTTPRequest.RESULT_CHUNKED_BODY_SIZE_MISMATCH, HTTPRequest.RESULT_CONNECTION_ERROR, HTTPRequest.RESULT_NO_RESPONSE:
+			return "The connection closed during the download."
+		HTTPRequest.RESULT_CANT_CONNECT, HTTPRequest.RESULT_CANT_RESOLVE:
+			return "The game cannot connect to GitHub. Examine the network connection."
+		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
+			return "The secure connection to GitHub failed. Examine the system clock and the network."
+		HTTPRequest.RESULT_DOWNLOAD_FILE_CANT_OPEN, HTTPRequest.RESULT_DOWNLOAD_FILE_WRITE_ERROR:
+			return "The game cannot write the package. Examine the free disk space."
+		HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED:
+			return "GitHub sent too many redirects."
+		HTTPRequest.RESULT_TIMEOUT:
+			return "The download took too long."
+	return "Network error %d." % result
+
+
+## True when a new attempt can help (network or server trouble).
+static func can_retry(result: int, code: int) -> bool:
+	if result == HTTPRequest.RESULT_SUCCESS:
+		return code >= 500 or code == 429 or code == 408
+	return result in [HTTPRequest.RESULT_CHUNKED_BODY_SIZE_MISMATCH, HTTPRequest.RESULT_CONNECTION_ERROR,
+		HTTPRequest.RESULT_NO_RESPONSE, HTTPRequest.RESULT_CANT_CONNECT, HTTPRequest.RESULT_CANT_RESOLVE,
+		HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR, HTTPRequest.RESULT_TIMEOUT]
 
 
 static func url_is_trusted(url: String) -> bool:
@@ -769,11 +835,7 @@ func _fallback_dir() -> String:
 
 
 func _headers() -> PackedStringArray:
-	return PackedStringArray([
-		"User-Agent: GunFare/" + current_version,
-		"Accept: application/vnd.github+json",
-		"X-GitHub-Api-Version: 2022-11-28",
-	])
+	return api_headers(current_version)
 
 
 func _on_check_done(result: int, code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
@@ -808,7 +870,12 @@ func _on_download_done(result: int, code: int, _h: PackedStringArray, _b: Packed
 		return
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
 		_remove(_part_path)
-		_fail("The download failed (result %d, HTTP %d). Try again." % [result, code])
+		print("[update] Download attempt failed: result %d, HTTP %d." % [result, code])
+		if can_retry(result, code) and _retries_left > 0:
+			_retries_left -= 1
+			_start_download()
+			return
+		_fail("The download failed. %s Try again. (result %d, HTTP %d)" % [result_text(result, code), result, code])
 		return
 	var pack := _package()
 	var problem := verify_package(_part_path, _asset_size, _asset_digest, str(pack["exe"]))

@@ -58,6 +58,10 @@ Run the match test for 20 seconds:
 
 `godot --headless --path . res://tests/smoke_match.tscn -- dustline tdm 20`
 
+Run the update download test. It downloads a real release package with the game's own update code at a low frame rate:
+
+`godot --headless --path . res://tests/test_update_download.tscn -- latest GunFare-windows.zip --max-fps 5`
+
 Run the model test:
 
 `godot --headless --path . res://tests/test_models.tscn`
